@@ -54,48 +54,68 @@ class Product_Recommendations_Public {
 
 	/**
 	 * Register the stylesheets for the public-facing side of the site.
-	 *
-	 * @since    1.0.0
 	 */
 	public function enqueue_styles() {
+		// Debug
+		error_log('Enqueuing styles for Product Recommendations');
+		
+		// Load DaisyUI
+		wp_enqueue_style(
+			$this->plugin_name . '-daisyui',
+			'https://cdn.jsdelivr.net/npm/daisyui@4.12.23/dist/full.min.css',
+			array(),
+			'4.12.23'
+		);
 
-		/**
-		 * This function is provided for demonstration purposes only.
-		 *
-		 * An instance of this class should be passed to the run() function
-		 * defined in Product_Recommendations_Loader as all of the hooks are defined
-		 * in that particular class.
-		 *
-		 * The Product_Recommendations_Loader will then create the relationship
-		 * between the defined hooks and the functions defined in this
-		 * class.
-		 */
-
-		wp_enqueue_style( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'css/product-recommendations-public.css', array(), $this->version, 'all' );
-
+		// Load plugin-specific styles after frameworks
+		wp_enqueue_style(
+			$this->plugin_name,
+			plugin_dir_url(__FILE__) . 'css/product-recommendations-public.css',
+			array($this->plugin_name . '-daisyui'),
+			$this->version
+		);
 	}
 
 	/**
 	 * Register the JavaScript for the public-facing side of the site.
-	 *
-	 * @since    1.0.0
 	 */
 	public function enqueue_scripts() {
+		// Debug
+		error_log('Enqueuing scripts for Product Recommendations');
+		
+		// Load Tailwind
+		wp_enqueue_script(
+			$this->plugin_name . '-tailwind', 
+			'https://cdn.tailwindcss.com',
+			array(),
+			null,
+			false // Load in header
+		);
 
-		/**
-		 * This function is provided for demonstration purposes only.
-		 *
-		 * An instance of this class should be passed to the run() function
-		 * defined in Product_Recommendations_Loader as all of the hooks are defined
-		 * in that particular class.
-		 *
-		 * The Product_Recommendations_Loader will then create the relationship
-		 * between the defined hooks and the functions defined in this
-		 * class.
-		 */
+		// Add Tailwind configuration
+		wp_add_inline_script($this->plugin_name . '-tailwind', "
+			tailwind.config = {
+				corePlugins: {
+					preflight: false,
+				},
+				important: true,
+				theme: {
+					extend: {}
+				},
+				daisyui: {
+					themes: ['light']
+				}
+			}
+		");
 
-		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/product-recommendations-public.js', array( 'jquery' ), $this->version, false );
-
+		// Load plugin-specific scripts
+		wp_enqueue_script(
+			$this->plugin_name,
+			plugin_dir_url(__FILE__) . 'js/product-recommendations-public.js',
+			array('jquery', $this->plugin_name . '-tailwind'),
+			$this->version,
+			true // Load in footer
+		);
 	}
 
 	/**
@@ -135,6 +155,9 @@ class Product_Recommendations_Public {
 	}
 
 	public function recommendations_content() {
+		// Debug output
+		echo "<!-- Loading Product Recommendations Content -->";
+		
 		// Load the template
 		$template = plugin_dir_path( dirname( __FILE__ ) ) . 'public/partials/product-recommendations-tab-content.php';
 		

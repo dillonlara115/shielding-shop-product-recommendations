@@ -14,11 +14,16 @@ if (!defined('ABSPATH')) {
 $current_user = wp_get_current_user();
 ?>
 
-<div class="woocommerce-recommendations">
-    <h2>Your Product Recommendations</h2>
-    <p>Welcome <?php echo esc_html($current_user->display_name); ?>, here are your personalized product recommendations.</p>
-    
-    <?php
-    // Add your recommendation logic here
-    ?>
-</div> 
+<!-- Tailwind/DaisyUI Test -->
+<div class="container mx-auto p-4">
+    <div class="w-full ">
+        <div class="">
+            <h2 class=" text-2xl mb-4">Your Product Recommendations</h2>
+            <p class="text-lg mb-6">
+                Welcome <?php echo esc_html($current_user->display_name); ?>, 
+                here are your personalized product recommendations.
+            </p>
+            
+            </div>
+    </div>
+</div>  
