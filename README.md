@@ -29,15 +29,15 @@ The **WooCommerce Product Recommendations Plugin** allows store owners and team 
 ### Development Tasks
 | Feature | Estimated Hours |
 |---------|----------------|
-| Set Up Development Environment | 3 hrs |
-| Customer Dashboard UI Design & Development | 20 hrs |
-| Admin Dashboard UI Design & Development | 20 hrs |
-| Product Assignment System | 12 hrs |
-| WooCommerce Integration | 8 hrs |
-| Email Notifications | 3 hrs |
-| Security & Role-Based Access | 3 hrs |
-| Testing & Debugging | 5 hrs |
-| Deployment & Support | 5 hrs |
+| Set Up Development Environment | Complete |
+| Customer Dashboard UI Design & Development | In Progress |
+| Admin Dashboard UI Design & Development | In Progress |
+| Product Assignment System | In Progress |
+| WooCommerce Integration | In Progress |
+| Email Notifications | In Progress |
+| Security & Role-Based Access | In Progress |
+| Testing & Debugging | In Progress |
+| Deployment & Support | In Progress |
 
 ## Future Enhancements
 - Automated product recommendations based on past purchases.
@@ -45,7 +45,7 @@ The **WooCommerce Product Recommendations Plugin** allows store owners and team 
 - Improved analytics for tracking customer engagement.
 
 ## Support
-For any issues or feature requests, please contact [support@yourdomain.com](mailto:support@yourdomain.com).
+For any issues or feature requests, please contact [dev@seosuccor.com](mailto:dev@seosuccor.com).
 
 ## License
 This project is licensed under the MIT License - see the LICENSE file for details.
