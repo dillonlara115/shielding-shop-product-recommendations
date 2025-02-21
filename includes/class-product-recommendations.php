@@ -185,6 +185,7 @@ class Product_Recommendations {
 		// Add menu item and content
 		add_filter('woocommerce_account_menu_items', array($plugin_public, 'add_recommendations_menu_item'));
 		add_action('woocommerce_account_product-recommendations_endpoint', array($plugin_public, 'recommendations_content'));
+		add_action('woocommerce_account_product-recommendations-customers_endpoint', array($plugin_public, 'customers_content'));
 
 	}
 

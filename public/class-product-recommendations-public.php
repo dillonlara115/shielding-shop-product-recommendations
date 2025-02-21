@@ -59,19 +59,12 @@ class Product_Recommendations_Public {
 		// Debug
 		error_log('Enqueuing styles for Product Recommendations');
 		
-		// Load DaisyUI
-		wp_enqueue_style(
-			$this->plugin_name . '-daisyui',
-			'https://cdn.jsdelivr.net/npm/daisyui@4.12.23/dist/full.min.css',
-			array(),
-			'4.12.23'
-		);
-
+	
 		// Load plugin-specific styles after frameworks
 		wp_enqueue_style(
 			$this->plugin_name,
 			plugin_dir_url(__FILE__) . 'css/product-recommendations-public.css',
-			array($this->plugin_name . '-daisyui'),
+			array(),
 			$this->version
 		);
 	}
@@ -83,36 +76,14 @@ class Product_Recommendations_Public {
 		// Debug
 		error_log('Enqueuing scripts for Product Recommendations');
 		
-		// Load Tailwind
-		wp_enqueue_script(
-			$this->plugin_name . '-tailwind', 
-			'https://cdn.tailwindcss.com',
-			array(),
-			null,
-			false // Load in header
-		);
 
-		// Add Tailwind configuration
-		wp_add_inline_script($this->plugin_name . '-tailwind', "
-			tailwind.config = {
-				corePlugins: {
-					preflight: false,
-				},
-				important: true,
-				theme: {
-					extend: {}
-				},
-				daisyui: {
-					themes: ['light']
-				}
-			}
-		");
+
 
 		// Load plugin-specific scripts
 		wp_enqueue_script(
 			$this->plugin_name,
 			plugin_dir_url(__FILE__) . 'js/product-recommendations-public.js',
-			array('jquery', $this->plugin_name . '-tailwind'),
+			array(),
 			$this->version,
 			true // Load in footer
 		);
@@ -126,21 +97,28 @@ class Product_Recommendations_Public {
 			$vars = array();
 		}
 		$vars[] = 'product-recommendations';
+		$vars[] = 'product-recommendations/customers';
 		return $vars;
 	}
 
 	public function add_recommendations_endpoint() {
-		// Only add if WooCommerce is active
 		if (!class_exists('WooCommerce')) {
 			return;
 		}
 		
-		// Add the endpoint
+		// Register the base endpoint
 		add_rewrite_endpoint('product-recommendations', EP_ROOT | EP_PAGES);
+		add_rewrite_endpoint('product-recommendations/customers', EP_ROOT | EP_PAGES);
+		add_rewrite_endpoint('product-recommendations/recommendations', EP_ROOT | EP_PAGES);
+		
+		// Ensure WordPress recognizes new endpoints
+		flush_rewrite_rules();
 	}
-
+	
 	public function init() {
 		add_rewrite_endpoint('product-recommendations', EP_ROOT | EP_PAGES);
+		add_rewrite_endpoint('product-recommendations/customers', EP_ROOT | EP_PAGES); 
+		add_rewrite_endpoint('product-recommendations/recommendations', EP_ROOT | EP_PAGES);
 	}
 
 	public function add_recommendations_menu_item($items) {
@@ -155,21 +133,64 @@ class Product_Recommendations_Public {
 	}
 
 	public function recommendations_content() {
-		// Debug output
+		global $wp_query;
+	
+		// Debugging Output
+		echo "<!-- Checking WooCommerce Endpoint -->";
+		// echo "<pre>";
+		// print_r($wp_query->query_vars);
+		// echo "</pre>";
+	
+		// Check if we are on '/product-recommendations/customers'
+		$endpoint_value = get_query_var('product-recommendations');
+	
+		if ($endpoint_value === 'customers') {
+			echo "<!-- Loading Customers Content -->";
+	
+			// Load the correct template for customers
+			$template = plugin_dir_path(dirname(__FILE__)) . 'public/partials/view-customers.php';
+			$theme_template = locate_template('woocommerce/view-customers.php');
+	
+			if ($theme_template) {
+				$template = $theme_template;
+			}
+	
+			if (file_exists($template)) {
+				include $template;
+			}
+			return;
+		}
+
+		// Check if we are on '/product-recommendations/recommendations'
+		if ($endpoint_value === 'recommendations') {
+			echo "<!-- Loading Recommendations Content -->";
+
+			// Load the correct template for recommendations
+			$template = plugin_dir_path(dirname(__FILE__)) . 'public/partials/view-recommendations.php';
+			$theme_template = locate_template('woocommerce/view-recommendations.php');
+
+			if ($theme_template) {
+				$template = $theme_template;
+			}
+
+			if (file_exists($template)) {
+				include $template;
+			}
+			return;
+		}
+	
+		// Default to product-recommendations-tab-content.php
 		echo "<!-- Loading Product Recommendations Content -->";
-		
-		// Load the template
-		$template = plugin_dir_path( dirname( __FILE__ ) ) . 'public/partials/product-recommendations-tab-content.php';
-		
-		// Allow template override in theme
+		$template = plugin_dir_path(dirname(__FILE__)) . 'public/partials/product-recommendations-tab-content.php';
 		$theme_template = locate_template('woocommerce/product-recommendations-tab-content.php');
+	
 		if ($theme_template) {
 			$template = $theme_template;
 		}
-		
+	
 		if (file_exists($template)) {
 			include $template;
 		}
 	}
-
+	
 }

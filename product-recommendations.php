@@ -78,5 +78,16 @@ function run_product_recommendations() {
 	$plugin = new Product_Recommendations();
 	$plugin->run();
 
+	// Register activation hook
+	register_activation_hook(__FILE__, array('Product_Recommendations_Public', 'activate'));
+
 }
 run_product_recommendations();
+
+
+function pr_flush_rewrite_rules() {
+    $plugin = new Product_Recommendations_Public('product-recommendations', '1.0.0');
+    $plugin->add_recommendations_endpoint();
+    flush_rewrite_rules();
+}
+register_activation_hook(__FILE__, 'pr_flush_rewrite_rules');
