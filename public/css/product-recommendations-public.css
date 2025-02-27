@@ -4,3 +4,80 @@
  */
 
  @import "bulma.min.css";
+
+/* Add to your existing CSS */
+.status-badge {
+    display: inline-block;
+    padding: 0.25em 0.5em;
+    border-radius: 3px;
+    font-size: 0.85em;
+    font-weight: 600;
+}
+.status-active {
+    background-color: #e5f9e5;
+    color: #1e7e1e;
+}
+.status-inactive {
+    background-color: #f9e5e5;
+    color: #7e1e1e;
+}
+.status-pending {
+    background-color: #f9f5e5;
+    color: #7e6e1e;
+}
+
+.product-thumb {
+    width: 50px;
+    height: 50px;
+    object-fit: cover;
+    border-radius: 4px;
+}
+
+.product-thumbnail {
+    width: 70px;
+}
+
+/* For the empty state */
+.woocommerce-no-items {
+    text-align: center;
+    padding: 20px;
+    color: #666;
+}
+
+/* Tab navigation styles */
+.tabs-wrapper {
+    margin-bottom: 2rem;
+}
+
+.tabs ul {
+    border-bottom-color: #dbdbdb;
+}
+
+.tabs li.is-active a {
+    border-bottom-color: #3273dc;
+    color: #3273dc;
+}
+
+.tabs a {
+    padding: 0.5em 1em;
+    font-weight: 500;
+}
+
+/* Dashboard styles */
+.dashboard-stats {
+    margin-top: 2rem;
+}
+
+.dashboard-stats .card {
+    height: 100%;
+}
+
+.dashboard-stats .subtitle.is-1 {
+    text-align: center;
+    font-size: 3rem;
+    margin-top: 1rem;
+}
+
+.recent-activity {
+    margin-top: 3rem;
+}

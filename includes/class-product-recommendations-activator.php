@@ -39,8 +39,12 @@ class Product_Recommendations_Activator {
 		// Add the endpoint
 		add_rewrite_endpoint('product-recommendations', EP_ROOT | EP_PAGES);
 		
-		// Flush rewrite rules
-		flush_rewrite_rules();
+		// Create database tables
+		require_once plugin_dir_path(dirname(__FILE__)) . 'includes/class-product-recommendations-db.php';
+		Product_Recommendations_DB::create_tables();
+		
+		// Set flag to flush rewrite rules
+		update_option('product_recommendations_flush_rewrite_rules', true);
 	}
 
 }
