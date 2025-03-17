@@ -43,7 +43,10 @@ define( 'PRODUCT_RECOMMENDATIONS_VERSION', '1.0.0' );
  */
 function activate_product_recommendations() {
 	require_once plugin_dir_path( __FILE__ ) . 'includes/class-product-recommendations-activator.php';
+	require_once plugin_dir_path( __FILE__ ) . 'includes/class-product-recommendations-db.php';
+	
 	Product_Recommendations_Activator::activate();
+	Product_Recommendations_DB::create_tables();
 }
 
 /**
@@ -74,20 +77,22 @@ require plugin_dir_path( __FILE__ ) . 'includes/class-product-recommendations.ph
  * @since    1.0.0
  */
 function run_product_recommendations() {
-
 	$plugin = new Product_Recommendations();
 	$plugin->run();
-
-	// Register activation hook
-	register_activation_hook(__FILE__, array('Product_Recommendations_Public', 'activate'));
-
 }
 run_product_recommendations();
 
-
 function pr_flush_rewrite_rules() {
-    $plugin = new Product_Recommendations_Public('product-recommendations', '1.0.0');
-    $plugin->add_recommendations_endpoint();
-    flush_rewrite_rules();
+	require_once plugin_dir_path(__FILE__) . 'includes/class-product-recommendations-db.php';
+	require_once plugin_dir_path(__FILE__) . 'public/class-product-recommendations-public.php';
+	
+	// Create database tables
+	Product_Recommendations_DB::create_tables();
+	
+	// Setup rewrite rules
+	$plugin = new Product_Recommendations_Public('product-recommendations', '1.0.0');
+	$plugin->add_recommendations_endpoint();
+	flush_rewrite_rules();
 }
+
 register_activation_hook(__FILE__, 'pr_flush_rewrite_rules');

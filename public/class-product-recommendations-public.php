@@ -59,6 +59,10 @@ class Product_Recommendations_Public {
 		add_action('wp_ajax_search_products', array($this, 'search_products_ajax'));
 		add_action('wp_ajax_add_recommendation', array($this, 'add_recommendation_ajax'));
 		add_action('wp_ajax_remove_recommendation', array($this, 'remove_recommendation_ajax'));
+		add_action('wp_ajax_add_room', array($this, 'add_room_ajax'));
+		add_action('wp_ajax_edit_room', array($this, 'edit_room_ajax'));
+		add_action('wp_ajax_delete_room', array($this, 'delete_room_ajax'));
+		add_action('wp_ajax_get_customer_rooms', array($this, 'get_customer_rooms_ajax'));
 	}
 
 	/**
@@ -133,6 +137,7 @@ class Product_Recommendations_Public {
 				'ajax_url' => admin_url('admin-ajax.php'),
 				'nonce' => wp_create_nonce('product_search_nonce'),
 				'texts' => array(
+					'general_recommendations' => __('General Recommendations', 'product-recommendations'),
 					'current_recommendations' => __('Current Recommendations', 'product-recommendations'),
 					'image' => __('Image', 'product-recommendations'),
 					'product' => __('Product', 'product-recommendations'),
@@ -145,6 +150,36 @@ class Product_Recommendations_Public {
 					'no_recommendations' => __('No recommendations found for this customer.', 'product-recommendations')
 				)
 			)
+		);
+
+		// Add to product-recommendations.js
+		wp_add_inline_script(
+			$this->plugin_name . '-product-recommendations',
+			"$('#add-room-btn').on('click', function(e) {
+				e.preventDefault();
+				const roomName = prompt('Enter room name:');
+				if (!roomName) return;
+				
+				$.ajax({
+					url: pr_product_object.ajax_url,
+					type: 'POST',
+					data: {
+						action: 'add_room',
+						nonce: pr_product_object.nonce,
+						room_name: roomName
+					},
+					success: function(response) {
+						if (response.success) {
+							$('#recommendation_room').append(
+								$('<option>', {
+									value: response.data.id,
+									text: response.data.name
+								})
+							);
+						}
+					}
+				});
+			});"
 		);
 	}
 
@@ -169,6 +204,7 @@ class Product_Recommendations_Public {
 		// Register the base endpoint
 		add_rewrite_endpoint('product-recommendations', EP_ROOT | EP_PAGES);
 		add_rewrite_endpoint('product-recommendations/customers', EP_ROOT | EP_PAGES);
+		add_rewrite_endpoint('product-recommendations/customers/add', EP_ROOT | EP_PAGES);
 		add_rewrite_endpoint('product-recommendations/recommendations', EP_ROOT | EP_PAGES);
 		
 		// Ensure WordPress recognizes new endpoints
@@ -465,7 +501,11 @@ class Product_Recommendations_Public {
 		$customer_id = intval($_POST['customer_id']);
 		$product_id = intval($_POST['product_id']);
 		$notes = sanitize_textarea_field($_POST['notes']);
+		$room_id = !empty($_POST['room_id']) ? intval($_POST['room_id']) : null;
 		$team_member_id = get_current_user_id();
+		
+		// Debug output
+		error_log('Adding recommendation with room_id: ' . var_export($room_id, true));
 		
 		// Validate customer exists and belongs to this team member
 		global $wpdb;
@@ -487,47 +527,106 @@ class Product_Recommendations_Public {
 			wp_send_json_error('Invalid product');
 		}
 		
-		// Check if recommendation already exists
+		// Check if this product is already recommended for this customer in the same room
 		$recommendations_table = $wpdb->prefix . 'pr_recommendations';
 		
 		$existing = $wpdb->get_var($wpdb->prepare(
-			"SELECT id FROM $recommendations_table WHERE customer_id = %d AND product_id = %d",
+			"SELECT id FROM $recommendations_table 
+			 WHERE customer_id = %d 
+			 AND product_id = %d 
+			 AND (room_id = %d OR (room_id IS NULL AND %d IS NULL))",
 			$customer_id,
-			$product_id
+			$product_id,
+			$room_id,
+			$room_id
 		));
 		
 		if ($existing) {
-			wp_send_json_error('This product is already recommended for this customer');
+			wp_send_json_error('This product is already recommended for this customer in this room');
+		}
+		
+		// If room_id is provided, verify it belongs to this customer
+		if ($room_id) {
+			$room = $wpdb->get_row($wpdb->prepare(
+				"SELECT id FROM {$wpdb->prefix}pr_rooms 
+				 WHERE id = %d AND customer_id = %d",
+				$room_id,
+				$customer_id
+			));
+			
+			if (!$room) {
+				wp_send_json_error('Invalid room');
+			}
 		}
 		
 		// Insert new recommendation
+		$data = array(
+			'customer_id' => $customer_id,
+			'team_member_id' => $team_member_id,
+			'product_id' => $product_id,
+			'date_created' => current_time('mysql'),
+			'status' => 'pending',
+			'notes' => $notes
+		);
+		
+		$formats = array(
+			'%d',  // customer_id
+			'%d',  // team_member_id
+			'%d',  // product_id
+			'%s',  // date_created
+			'%s',  // status
+			'%s'   // notes
+		);
+		
+		// Only add room_id if it's not empty
+		if (!empty($room_id)) {
+			$data['room_id'] = $room_id;
+			$formats[] = '%d';  // room_id
+		}
+		
 		$result = $wpdb->insert(
 			$recommendations_table,
-			array(
-				'customer_id' => $customer_id,
-				'team_member_id' => $team_member_id,
-				'product_id' => $product_id,
-				'date_created' => current_time('mysql'),
-				'status' => 'pending',
-				'notes' => $notes
-			),
-			array('%d', '%d', '%d', '%s', '%s', '%s')
+			$data,
+			$formats
 		);
 		
 		if ($result === false) {
-			$db_error = $wpdb->last_error;
-			wp_send_json_error('Database error: ' . $db_error);
+			wp_send_json_error('Failed to add recommendation: ' . $wpdb->last_error);
 		} else {
-			$recommendation_id = $wpdb->insert_id;
+			// Verify the insertion
+			$inserted = $wpdb->get_row($wpdb->prepare(
+				"SELECT * FROM $recommendations_table WHERE id = %d",
+				$wpdb->insert_id
+			));
+			error_log('Inserted recommendation: ' . print_r($inserted, true));
 			
+			// Get the product details for the response
+			$product = wc_get_product($product_id);
+			
+			// Get room name if room_id is provided
+			$room_name = '';
+			if ($room_id) {
+				$room_name = $wpdb->get_var($wpdb->prepare(
+					"SELECT name FROM {$wpdb->prefix}pr_rooms WHERE id = %d",
+					$room_id
+				));
+			}
+
+			// Debug log
+			error_log('Room ID: ' . $room_id);
+			error_log('Room Name: ' . $room_name);
+
 			wp_send_json_success(array(
 				'message' => 'Recommendation added successfully!',
 				'recommendation' => array(
-					'id' => $recommendation_id,
-					'product_url' => get_permalink($product_id),
-					'date_formatted' => date_i18n(get_option('date_format')),
+					'id' => $wpdb->insert_id,
+					'product_name' => $product->get_name(),
+					'product_image' => wp_get_attachment_image_url($product->get_image_id(), 'thumbnail'),
+					'date_created' => date_i18n(get_option('date_format')),
 					'status' => 'pending',
-					'status_label' => 'Pending'
+					'notes' => $notes,
+					'room_id' => $room_id,
+					'room_name' => $room_name
 				)
 			));
 		}
@@ -579,5 +678,267 @@ class Product_Recommendations_Public {
 				'message' => 'Recommendation removed successfully!'
 			));
 		}
+	}
+
+	/**
+	 * Handle AJAX add room
+	 */
+	public function add_room_ajax() {
+		// Verify nonce
+		if (!check_ajax_referer('product_search_nonce', 'nonce', false)) {
+			wp_send_json_error('Invalid nonce');
+		}
+		
+		// Verify user can add rooms
+		if (!current_user_can('read')) {
+			wp_send_json_error('Unauthorized');
+		}
+		
+		global $wpdb;
+		
+		// Check if tables exist, create them if they don't
+		$table_name = $wpdb->prefix . 'pr_rooms';
+		if($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) {
+			require_once plugin_dir_path(dirname(__FILE__)) . 'includes/class-product-recommendations-db.php';
+			Product_Recommendations_DB::create_tables();
+		}
+		
+		$room_name = sanitize_text_field($_POST['room_name']);
+		$customer_id = intval($_POST['customer_id']);
+		$team_member_id = get_current_user_id();
+		
+		if (empty($room_name)) {
+			wp_send_json_error('Room name is required');
+		}
+		
+		// Verify customer belongs to team member
+		$customer_table = $wpdb->prefix . 'pr_customers';
+		$customer = $wpdb->get_row($wpdb->prepare(
+			"SELECT * FROM $customer_table WHERE id = %d AND team_member_id = %d",
+			$customer_id,
+			$team_member_id
+		));
+		
+		if (!$customer) {
+			wp_send_json_error('Invalid customer');
+		}
+		
+		// Insert new room
+		$result = $wpdb->insert(
+			$table_name,
+			array(
+				'customer_id' => $customer_id,
+				'name' => $room_name,
+				'date_created' => current_time('mysql')
+			),
+			array('%d', '%s', '%s')
+		);
+		
+		if ($result === false) {
+			wp_send_json_error('Failed to create room: ' . $wpdb->last_error);
+		} else {
+			wp_send_json_success(array(
+				'id' => $wpdb->insert_id,
+				'name' => $room_name
+			));
+		}
+	}
+
+	/**
+	 * Handle AJAX edit room
+	 */
+	public function edit_room_ajax() {
+		// Verify nonce
+		if (!check_ajax_referer('product_search_nonce', 'nonce', false)) {
+			wp_send_json_error('Invalid nonce');
+		}
+		
+		// Verify user can edit rooms
+		if (!current_user_can('read')) {
+			wp_send_json_error('Unauthorized');
+		}
+		
+		$room_id = intval($_POST['room_id']);
+		$room_name = sanitize_text_field($_POST['room_name']);
+		$team_member_id = get_current_user_id();
+		
+		if (empty($room_name)) {
+			wp_send_json_error('Room name is required');
+		}
+		
+		global $wpdb;
+		$table_name = $wpdb->prefix . 'pr_rooms';
+		
+		// Verify room belongs to a customer that belongs to this team member
+		$is_authorized = $wpdb->get_var($wpdb->prepare(
+			"SELECT r.id 
+			 FROM {$wpdb->prefix}pr_rooms r
+			 JOIN {$wpdb->prefix}pr_customers c ON r.customer_id = c.id
+			 WHERE r.id = %d AND c.team_member_id = %d",
+			$room_id,
+			$team_member_id
+		));
+		
+		if (!$is_authorized) {
+			wp_send_json_error('Unauthorized to edit this room');
+		}
+		
+		// Update room
+		$result = $wpdb->update(
+			$table_name,
+			array('name' => $room_name),
+			array('id' => $room_id),
+			array('%s'),
+			array('%d')
+		);
+		
+		if ($result === false) {
+			wp_send_json_error('Failed to update room');
+		} else {
+			wp_send_json_success();
+		}
+	}
+
+	/**
+	 * Handle AJAX delete room
+	 */
+	public function delete_room_ajax() {
+		// Verify nonce
+		if (!check_ajax_referer('product_search_nonce', 'nonce', false)) {
+			wp_send_json_error('Invalid nonce');
+		}
+		
+		// Verify user can delete rooms
+		if (!current_user_can('read')) {
+			wp_send_json_error('Unauthorized');
+		}
+		
+		$room_id = intval($_POST['room_id']);
+		$team_member_id = get_current_user_id();
+		
+		global $wpdb;
+		$table_name = $wpdb->prefix . 'pr_rooms';
+		
+		// Verify room belongs to a customer that belongs to this team member
+		$is_authorized = $wpdb->get_var($wpdb->prepare(
+			"SELECT r.id 
+			 FROM {$wpdb->prefix}pr_rooms r
+			 JOIN {$wpdb->prefix}pr_customers c ON r.customer_id = c.id
+			 WHERE r.id = %d AND c.team_member_id = %d",
+			$room_id,
+			$team_member_id
+		));
+		
+		if (!$is_authorized) {
+			wp_send_json_error('Unauthorized to delete this room');
+		}
+		
+		// Delete room
+		$result = $wpdb->delete(
+			$table_name,
+			array('id' => $room_id),
+			array('%d')
+		);
+		
+		if ($result === false) {
+			wp_send_json_error('Failed to delete room');
+		} else {
+			// Update recommendations to remove room_id
+			$wpdb->update(
+				$wpdb->prefix . 'pr_recommendations',
+				array('room_id' => null),
+				array('room_id' => $room_id),
+				array('%d'),
+				array('%d')
+			);
+			
+			wp_send_json_success();
+		}
+	}
+
+	/**
+	 * Handle AJAX get customer rooms
+	 */
+	public function get_customer_rooms_ajax() {
+		// Verify nonce
+		if (!check_ajax_referer('product_search_nonce', 'nonce', false)) {
+			wp_send_json_error('Invalid nonce');
+		}
+		
+		// Verify user can view rooms
+		if (!current_user_can('read')) {
+			wp_send_json_error('Unauthorized');
+		}
+		
+		$customer_id = intval($_POST['customer_id']);
+		$team_member_id = get_current_user_id();
+		
+		// Verify customer belongs to team member
+		global $wpdb;
+		$customer_table = $wpdb->prefix . 'pr_customers';
+		$customer = $wpdb->get_row($wpdb->prepare(
+			"SELECT * FROM $customer_table WHERE id = %d AND team_member_id = %d",
+			$customer_id,
+			$team_member_id
+		));
+		
+		if (!$customer) {
+			wp_send_json_error('Invalid customer');
+		}
+		
+		// Get rooms for customer
+		$rooms = $wpdb->get_results($wpdb->prepare(
+			"SELECT id, name FROM {$wpdb->prefix}pr_rooms WHERE customer_id = %d ORDER BY name ASC",
+			$customer_id
+		));
+		
+		wp_send_json_success($rooms);
+	}
+
+	/**
+	 * Handle recommendations display
+	 */
+	public function handle_recommendations_endpoint() {
+		global $wpdb;
+		$customer_id = get_query_var('customer_id');
+		
+		// Get customer details
+		$customer_table = $wpdb->prefix . 'pr_customers';
+		$customer = $wpdb->get_row($wpdb->prepare(
+			"SELECT c.*, u.display_name, u.user_email 
+			 FROM $customer_table c
+			 JOIN {$wpdb->users} u ON c.user_id = u.ID
+			 WHERE c.id = %d AND c.team_member_id = %d",
+			$customer_id,
+			get_current_user_id()
+		));
+		
+		if (!$customer) {
+			wp_die(__('Invalid customer', 'product-recommendations'));
+		}
+		
+		// Get all recommendations for this customer with room names
+		$recommendations_table = $wpdb->prefix . 'pr_recommendations';
+		
+		// Modified query to ensure we're getting the correct room data
+		$query = $wpdb->prepare(
+			"SELECT r.*, p.post_title as product_name, r.room_id, rm.name as room_name
+			 FROM {$wpdb->prefix}pr_recommendations r
+			 LEFT JOIN {$wpdb->posts} p ON r.product_id = p.ID
+			 LEFT JOIN {$wpdb->prefix}pr_rooms rm ON r.room_id = rm.id
+			 WHERE r.customer_id = %d
+			 ORDER BY COALESCE(r.room_id, 0), r.date_created DESC",
+			$customer_id
+		);
+		
+		$recommendations = $wpdb->get_results($query);
+		
+		// Debug output
+		error_log('Recommendations Query: ' . $query);
+		error_log('Number of recommendations found: ' . count($recommendations));
+		error_log('Raw recommendations data: ' . print_r($recommendations, true));
+		
+		// Include the template
+		include plugin_dir_path(__FILE__) . 'partials/manage-recommendations.php';
 	}
 }

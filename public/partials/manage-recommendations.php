@@ -41,11 +41,12 @@ if (!$customer) {
 // Get existing recommendations
 $recommendations_table = $wpdb->prefix . 'pr_recommendations';
 $recommendations = $wpdb->get_results($wpdb->prepare(
-    "SELECT r.*, p.post_title as product_name, p.ID as product_id
+    "SELECT r.*, p.post_title as product_name, p.ID as product_id, rm.name as room_name
      FROM $recommendations_table r
      JOIN {$wpdb->posts} p ON r.product_id = p.ID
+     LEFT JOIN {$wpdb->prefix}pr_rooms rm ON r.room_id = rm.id
      WHERE r.customer_id = %d
-     ORDER BY r.date_created DESC",
+     ORDER BY COALESCE(r.room_id, 0), r.date_created DESC",
     $customer_id
 ));
 
@@ -78,6 +79,58 @@ $ajax_nonce = wp_create_nonce('product_search_nonce');
         </div>
     </div>
     
+    <div class="rooms-management mt-6 mb-6">
+        <h3 class="title is-4"><?php esc_html_e('Room Management', 'product-recommendations'); ?></h3>
+        
+        <div class="mb-4">
+            <button id="add-room-btn" class="button is-primary" data-customer-id="<?php echo esc_attr($customer_id); ?>">
+                <?php esc_html_e('Add New Room', 'product-recommendations'); ?>
+            </button>
+        </div>
+
+        <?php
+        // Get rooms for current customer
+        $rooms = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, name, date_created FROM {$wpdb->prefix}pr_rooms 
+             WHERE customer_id = %d 
+             ORDER BY name ASC",
+            $customer_id
+        ));
+        ?>
+
+        <table class="woocommerce-table shop_table">
+            <thead>
+                <tr>
+                    <th><?php esc_html_e('Room Name', 'product-recommendations'); ?></th>
+                    <th><?php esc_html_e('Date Added', 'product-recommendations'); ?></th>
+                    <th><?php esc_html_e('Actions', 'product-recommendations'); ?></th>
+                </tr>
+            </thead>
+            <tbody id="rooms-list">
+                <?php if (empty($rooms)): ?>
+                    <tr>
+                        <td colspan="3" class="woocommerce-no-items"><?php esc_html_e('No rooms found', 'product-recommendations'); ?></td>
+                    </tr>
+                <?php else: 
+                    foreach ($rooms as $room): ?>
+                        <tr data-id="<?php echo esc_attr($room->id); ?>">
+                            <td class="room-name is-capitalized"><?php echo esc_html($room->name); ?></td>
+                            <td><?php echo esc_html(date_i18n(get_option('date_format'), strtotime($room->date_created))); ?></td>
+                            <td>
+                                <button class="button button-edit-room" data-id="<?php echo esc_attr($room->id); ?>">
+                                    <?php esc_html_e('Edit', 'product-recommendations'); ?>
+                                </button>
+                                <button class="button button-remove-room" data-id="<?php echo esc_attr($room->id); ?>">
+                                    <?php esc_html_e('Delete', 'product-recommendations'); ?>
+                                </button>
+                            </td>
+                        </tr>
+                    <?php endforeach;
+                endif; ?>
+            </tbody>
+        </table>
+    </div>
+    
     <div class="add-recommendation card mb-4">
         <header class="card-header">
             <p class="card-header-title">
@@ -106,11 +159,32 @@ $ajax_nonce = wp_create_nonce('product_search_nonce');
                         </div>
                         <div class="column">
                             <h4 id="selected-product-name" class="title is-5 mb-2"></h4>
-                            <p id="selected-product-price" class="subtitle is-6 mb-2"></p>
+                            <p id="selected-product-price" class="is-6 mb-2"></p>
                             <div class="field">
                                 <label class="label" for="recommendation_notes"><?php esc_html_e('Notes', 'product-recommendations'); ?></label>
                                 <div class="control">
                                     <textarea class="textarea" id="recommendation_notes" placeholder="<?php esc_attr_e('Add notes about why you recommend this product...', 'product-recommendations'); ?>"></textarea>
+                                </div>
+                            </div>
+                            <div class="field">
+                                <label class="label" for="recommendation_room"><?php esc_html_e('Room (Optional)', 'product-recommendations'); ?></label>
+                                <div class="control">
+                                    <div class="select">
+                                        <select id="recommendation_room" name="recommendation_room">
+                                            <option value=""><?php esc_html_e('General Recommendations', 'product-recommendations'); ?></option>
+                                            <?php
+                                            // Get rooms for current customer
+                                            $rooms = $wpdb->get_results($wpdb->prepare(
+                                                "SELECT id, name FROM {$wpdb->prefix}pr_rooms WHERE customer_id = %d ORDER BY name ASC",
+                                                $customer_id
+                                            ));
+                                            
+                                            foreach ($rooms as $room) {
+                                                echo '<option value="' . esc_attr($room->id) . '">' . esc_html($room->name) . '</option>';
+                                            }
+                                            ?>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
                             <button id="add-recommendation-btn" class="button is-primary" data-customer-id="<?php echo esc_attr($customer_id); ?>">
@@ -124,56 +198,48 @@ $ajax_nonce = wp_create_nonce('product_search_nonce');
     </div>
     
     <div class="existing-recommendations">
-        <h3 class="title is-4"><?php esc_html_e('Current Recommendations', 'product-recommendations'); ?></h3>
+        <?php
+        // Debug output
+        error_log('Recommendations data: ' . print_r($recommendations, true));
         
-        <?php if (empty($recommendations)): ?>
-            <tr>
-                <td colspan="6" class="woocommerce-no-items"><?php esc_html_e('No recommendations found for this customer.', 'product-recommendations'); ?></td>
-            </tr>
-        <?php else: ?>
-            <table class="woocommerce-table shop_table recommendations-table">
-                <thead>
-                    <tr>
-                        <th class="product-thumbnail"><?php esc_html_e('Image', 'product-recommendations'); ?></th>
-                        <th><?php esc_html_e('Product', 'product-recommendations'); ?></th>
-                        <th><?php esc_html_e('Date Added', 'product-recommendations'); ?></th>
-                        <th><?php esc_html_e('Status', 'product-recommendations'); ?></th>
-                        <th><?php esc_html_e('Notes', 'product-recommendations'); ?></th>
-                        <th><?php esc_html_e('Actions', 'product-recommendations'); ?></th>
-                    </tr>
-                </thead>
-                <tbody id="recommendations-list">
-                    <?php foreach ($recommendations as $recommendation): 
-                        // Get product image
-                        $product = wc_get_product($recommendation->product_id);
-                        $image_url = $product ? wp_get_attachment_image_url($product->get_image_id(), 'thumbnail') : wc_placeholder_img_src('thumbnail');
-                    ?>
-                        <tr data-id="<?php echo esc_attr($recommendation->id); ?>">
-                            <td class="product-thumbnail">
-                                <img src="<?php echo esc_url($image_url); ?>" alt="<?php echo esc_attr($recommendation->product_name); ?>" class="product-thumb" />
-                            </td>
-                            <td>
-                                <a href="<?php echo esc_url(get_permalink($recommendation->product_id)); ?>" target="_blank">
-                                    <?php echo esc_html($recommendation->product_name); ?>
-                                </a>
-                            </td>
-                            <td><?php echo esc_html(date_i18n(get_option('date_format'), strtotime($recommendation->date_created))); ?></td>
-                            <td>
-                                <span class="status-badge status-<?php echo esc_attr($recommendation->status); ?>">
-                                    <?php echo esc_html(ucfirst($recommendation->status)); ?>
-                                </span>
-                            </td>
-                            <td><?php echo esc_html($recommendation->notes); ?></td>
-                            <td>
-                                <a href="#" class="button button-remove-recommendation" data-id="<?php echo esc_attr($recommendation->id); ?>">
-                                    <?php esc_html_e('Remove', 'product-recommendations'); ?>
-                                </a>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        <?php endif; ?>
+        // Get recommendations grouped by room
+        $recommendations_by_room = array();
+        $general_recommendations = array();
+        
+        foreach ($recommendations as $recommendation) {
+            error_log('Processing recommendation: Room ID=' . var_export($recommendation->room_id, true) . ', Room Name=' . var_export($recommendation->room_name, true));
+            
+            if (!empty($recommendation->room_id)) {
+                if (!isset($recommendations_by_room[$recommendation->room_id])) {
+                    $recommendations_by_room[$recommendation->room_id] = array(
+                        'name' => $recommendation->room_name,
+                        'recommendations' => array()
+                    );
+                }
+                $recommendations_by_room[$recommendation->room_id]['recommendations'][] = $recommendation;
+            } else {
+                $general_recommendations[] = $recommendation;
+            }
+        }
+        
+        // After grouping
+        error_log('General recommendations count: ' . count($general_recommendations));
+        error_log('Room recommendations count: ' . count($recommendations_by_room));
+        error_log('Room recommendations data: ' . print_r($recommendations_by_room, true));
+        
+        // Display general recommendations first
+        if (!empty($general_recommendations)): ?>
+            <h3 class="title is-4 is-capitalized"><?php esc_html_e('General Recommendations', 'product-recommendations'); ?></h3>
+            <?php display_recommendations_table($general_recommendations); ?>
+        <?php endif;
+        
+        // Display room-specific recommendations
+        foreach ($recommendations_by_room as $room_id => $room_data): 
+            if (!empty($room_data['name'])): ?>
+                <h3 class="title is-4 mt-6 is-capitalized"><?php echo esc_html($room_data['name']); ?></h3>
+                <?php display_recommendations_table($room_data['recommendations']); ?>
+            <?php endif;
+        endforeach; ?>
     </div>
 </div>
 
@@ -228,4 +294,11 @@ $ajax_nonce = wp_create_nonce('product_search_nonce');
     max-width: 100%;
     height: auto;
 }
-</style> 
+</style>
+
+<?php
+// Helper function to display recommendations table
+function display_recommendations_table($recommendations) {
+    include 'recommendations-table.php';
+}
+?> 

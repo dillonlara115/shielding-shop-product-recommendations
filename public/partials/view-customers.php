@@ -69,10 +69,10 @@ $customers = $wpdb->get_results($wpdb->prepare(
                         <td>
                             <a href="<?php echo esc_url(wc_get_account_endpoint_url('product-recommendations/customers/' . $customer->id . '/recommendations')); ?>" class="button px-2">
                                 <i class="dashicons dashicons-edit"></i>
-                            </a><a href="#" class="text-red-500" data-customer-id="<?php echo esc_attr($customer->id); ?>">
+                            </a>
+                            <a href="#" class="text-red-500" data-customer-id="<?php echo esc_attr($customer->id); ?>">
                                 <i class="dashicons dashicons-trash"></i>
                             </a>
-                        </td>
                         </td>
                     </tr>
                 <?php endforeach;
