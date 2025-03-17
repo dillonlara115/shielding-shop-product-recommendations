@@ -83,16 +83,17 @@ function run_product_recommendations() {
 run_product_recommendations();
 
 function pr_flush_rewrite_rules() {
-	require_once plugin_dir_path(__FILE__) . 'includes/class-product-recommendations-db.php';
-	require_once plugin_dir_path(__FILE__) . 'public/class-product-recommendations-public.php';
-	
-	// Create database tables
-	Product_Recommendations_DB::create_tables();
-	
-	// Setup rewrite rules
-	$plugin = new Product_Recommendations_Public('product-recommendations', '1.0.0');
-	$plugin->add_recommendations_endpoint();
-	flush_rewrite_rules();
+	// Just set a flag to flush rules later
+	update_option('product_recommendations_flush_rewrite_rules', true);
 }
 
 register_activation_hook(__FILE__, 'pr_flush_rewrite_rules');
+
+// Also add a function to flush rules on plugin update
+function pr_maybe_flush_rules() {
+	if (get_option('product_recommendations_version') !== PRODUCT_RECOMMENDATIONS_VERSION) {
+		update_option('product_recommendations_flush_rewrite_rules', true);
+		update_option('product_recommendations_version', PRODUCT_RECOMMENDATIONS_VERSION);
+	}
+}
+add_action('plugins_loaded', 'pr_maybe_flush_rules');

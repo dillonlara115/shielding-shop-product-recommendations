@@ -63,6 +63,15 @@ class Product_Recommendations_Public {
 		add_action('wp_ajax_edit_room', array($this, 'edit_room_ajax'));
 		add_action('wp_ajax_delete_room', array($this, 'delete_room_ajax'));
 		add_action('wp_ajax_get_customer_rooms', array($this, 'get_customer_rooms_ajax'));
+
+		// Add customer recommendations endpoint
+		add_action('init', array($this, 'add_customer_recommendations_endpoint'));
+		
+		// Flush rewrite rules if needed
+		if (get_option('product_recommendations_flush_rewrite_rules')) {
+			flush_rewrite_rules();
+			delete_option('product_recommendations_flush_rewrite_rules');
+		}
 	}
 
 	/**
@@ -940,5 +949,63 @@ class Product_Recommendations_Public {
 		
 		// Include the template
 		include plugin_dir_path(__FILE__) . 'partials/manage-recommendations.php';
+	}
+
+	/**
+	 * Register customer recommendations endpoint
+	 */
+	public function add_customer_recommendations_endpoint() {
+		add_rewrite_endpoint('my-recommendations', EP_ROOT | EP_PAGES);
+		
+		// Add to My Account menu
+		add_filter('woocommerce_account_menu_items', function($items) {
+			$new_items = array();
+			
+			// Insert after Dashboard
+			foreach ($items as $key => $value) {
+				$new_items[$key] = $value;
+				if ($key === 'dashboard') {
+					$new_items['my-recommendations'] = __('My Recommendations', 'product-recommendations');
+				}
+			}
+			
+			return $new_items;
+		});
+		
+		// Add endpoint content
+		add_action('woocommerce_account_my-recommendations_endpoint', array($this, 'my_recommendations_content'));
+	}
+
+	/**
+	 * Display customer recommendations content
+	 */
+	public function my_recommendations_content() {
+		global $wpdb;
+		$user_id = get_current_user_id();
+		
+		// Get customer ID for this user
+		$customer_id = $wpdb->get_var($wpdb->prepare(
+			"SELECT id FROM {$wpdb->prefix}pr_customers WHERE user_id = %d",
+			$user_id
+		));
+		
+		if (!$customer_id) {
+			echo '<p>' . __('No recommendations found.', 'product-recommendations') . '</p>';
+			return;
+		}
+		
+		// Get recommendations for this customer
+		$recommendations = $wpdb->get_results($wpdb->prepare(
+			"SELECT r.*, p.post_title as product_name, rm.name as room_name
+			 FROM {$wpdb->prefix}pr_recommendations r
+			 LEFT JOIN {$wpdb->posts} p ON r.product_id = p.ID
+			 LEFT JOIN {$wpdb->prefix}pr_rooms rm ON r.room_id = rm.id
+			 WHERE r.customer_id = %d
+			 ORDER BY COALESCE(r.room_id, 0), r.date_created DESC",
+			$customer_id
+		));
+		
+		// Include the template
+		include plugin_dir_path(__FILE__) . 'partials/customer-recommendations.php';
 	}
 }
