@@ -72,6 +72,10 @@ class Product_Recommendations_Public {
 			flush_rewrite_rules();
 			delete_option('product_recommendations_flush_rewrite_rules');
 		}
+
+		// Add custom AJAX handler for adding products to cart
+		add_action('wp_ajax_add_to_cart_custom', array($this, 'add_to_cart_custom_ajax'));
+		add_action('wp_ajax_nopriv_add_to_cart_custom', array($this, 'add_to_cart_custom_ajax'));
 	}
 
 	/**
@@ -1007,5 +1011,28 @@ class Product_Recommendations_Public {
 		
 		// Include the template
 		include plugin_dir_path(__FILE__) . 'partials/customer-recommendations.php';
+	}
+
+	/**
+	 * Custom AJAX handler for adding products to cart
+	 */
+	public function add_to_cart_custom_ajax() {
+		check_ajax_referer('wc_store_api', 'nonce');
+		
+		$product_id = isset($_POST['product_id']) ? absint($_POST['product_id']) : 0;
+		$quantity = isset($_POST['quantity']) ? absint($_POST['quantity']) : 1;
+		
+		if ($product_id > 0) {
+			$added = WC()->cart->add_to_cart($product_id, $quantity);
+			if ($added) {
+				wp_send_json_success();
+			} else {
+				wp_send_json_error();
+			}
+		} else {
+			wp_send_json_error();
+		}
+		
+		wp_die();
 	}
 }

@@ -9,12 +9,28 @@
 if (!defined('ABSPATH')) {
     exit;
 }
+
+// Get all product IDs for "Add All to Cart" functionality
+$all_product_ids = array();
+foreach ($recommendations as $recommendation) {
+    if (!empty($recommendation->product_id)) {
+        $all_product_ids[] = $recommendation->product_id;
+    }
+}
 ?>
 
 <div class="woocommerce-account-content">
     <h2><?php esc_html_e('My Recommendations', 'product-recommendations'); ?></h2>
     
     <div class="woocommerce-notices-wrapper"></div>
+    
+    <?php if (!empty($recommendations)): ?>
+        <div class="add-all-actions mb-4">
+            <button class="button add-all-to-cart" data-products="<?php echo esc_attr(json_encode($all_product_ids)); ?>">
+                <?php esc_html_e('Add All Products to Cart', 'product-recommendations'); ?>
+            </button>
+        </div>
+    <?php endif; ?>
     
     <?php
     // Group recommendations by room
@@ -26,28 +42,56 @@ if (!defined('ABSPATH')) {
             if (!isset($recommendations_by_room[$recommendation->room_id])) {
                 $recommendations_by_room[$recommendation->room_id] = array(
                     'name' => $recommendation->room_name,
-                    'recommendations' => array()
+                    'recommendations' => array(),
+                    'product_ids' => array()
                 );
             }
             $recommendations_by_room[$recommendation->room_id]['recommendations'][] = $recommendation;
+            $recommendations_by_room[$recommendation->room_id]['product_ids'][] = $recommendation->product_id;
         } else {
             $general_recommendations[] = $recommendation;
         }
     }
     
+    // Get product IDs for general recommendations
+    $general_product_ids = array();
+    foreach ($general_recommendations as $recommendation) {
+        $general_product_ids[] = $recommendation->product_id;
+    }
+    
     // Display general recommendations first
     if (!empty($general_recommendations)): ?>
-        <h3 class="title is-4 is-capitalized"><?php esc_html_e('General Recommendations', 'product-recommendations'); ?></h3>
-        <?php display_customer_recommendations_table($general_recommendations); ?>
+        <div class="room-section">
+            <div class="room-header is-flex is-justify-content-space-between is-align-items-center mb-3">
+                <h3 class="title is-4 is-capitalized mb-0"><?php esc_html_e('General Recommendations', 'product-recommendations'); ?></h3>
+                <?php if (!empty($general_product_ids)): ?>
+                    <button class="button add-room-to-cart" data-products="<?php echo esc_attr(json_encode($general_product_ids)); ?>">
+                        <?php esc_html_e('Add All to Cart', 'product-recommendations'); ?>
+                    </button>
+                <?php endif; ?>
+            </div>
+            <?php display_customer_recommendations_table($general_recommendations); ?>
+        </div>
     <?php endif;
     
     // Display room-specific recommendations
     foreach ($recommendations_by_room as $room_id => $room_data): 
         if (!empty($room_data['name'])): ?>
-            <h3 class="title is-4 mt-6 is-capitalized"><?php echo esc_html($room_data['name']); ?></h3>
-            <?php display_customer_recommendations_table($room_data['recommendations']); ?>
+            <div class="room-section mt-6">
+                <div class="room-header is-flex is-justify-content-space-between is-align-items-center mb-3">
+                    <h3 class="title is-4 is-capitalized mb-0"><?php echo esc_html($room_data['name']); ?></h3>
+                    <?php if (!empty($room_data['product_ids'])): ?>
+                        <button class="button add-room-to-cart" data-products="<?php echo esc_attr(json_encode($room_data['product_ids'])); ?>">
+                            <?php esc_html_e('Add All to Cart', 'product-recommendations'); ?>
+                        </button>
+                    <?php endif; ?>
+                </div>
+                <?php display_customer_recommendations_table($room_data['recommendations']); ?>
+            </div>
         <?php endif;
     endforeach; ?>
+    
+    <div id="add-to-cart-status" class="woocommerce-message" style="display: none;"></div>
 </div>
 
 <?php
@@ -92,7 +136,7 @@ function display_customer_recommendations_table($recommendations) {
                             <a href="<?php echo esc_url(get_permalink($recommendation->product_id)); ?>" class="button is-text ">
                                 <?php esc_html_e('View Product', 'product-recommendations'); ?>
                             </a>
-                            <a href="<?php echo esc_url(add_query_arg('add-to-cart', $recommendation->product_id, wc_get_cart_url())); ?>" class="button ">
+                            <a href="<?php echo esc_url(add_query_arg('add-to-cart', $recommendation->product_id, wc_get_cart_url())); ?>" class="button add-single-to-cart" data-product-id="<?php echo esc_attr($recommendation->product_id); ?>">
                                 <?php esc_html_e('Add to Cart', 'product-recommendations'); ?>
                             </a>
                         </td>
@@ -106,10 +150,20 @@ function display_customer_recommendations_table($recommendations) {
 ?>
 
 <style>
-
-    .is-flex.is-2 {
-        gap: 1rem;
-    }
+.woocommerce .button.is-text {
+    background: none !important;
+    border: none !important;
+    color: #555 !important;
+    letter-spacing: 0 !important;
+    text-transform: capitalize !important;
+}
+.woocommerce a.button, .woocommerce .button {
+    font-size: 14px !important;
+    padding: 10px 15px !important;
+}
+.is-flex.is-2 {
+    gap: 1rem;
+}
 .product-info {
     display: flex;
     flex-direction: column;
@@ -122,4 +176,104 @@ function display_customer_recommendations_table($recommendations) {
     color: #666;
     font-size: 0.8em;
 }
-</style> 
+.room-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.add-all-actions {
+    text-align: right;
+    margin-bottom: 2rem;
+}
+#add-to-cart-status {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+    max-width: 300px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+</style>
+
+<script type="text/javascript">
+jQuery(document).ready(function($) {
+    // Add single product to cart
+    $('.add-single-to-cart').on('click', function(e) {
+        e.preventDefault();
+        var productId = $(this).data('product-id');
+        addProductsToCart([productId]);
+    });
+    
+    // Add all products from a room to cart
+    $('.add-room-to-cart').on('click', function() {
+        var products = $(this).data('products');
+        addProductsToCart(products);
+    });
+    
+    // Add all products to cart
+    $('.add-all-to-cart').on('click', function() {
+        var products = $(this).data('products');
+        addProductsToCart(products);
+    });
+    
+    function addProductsToCart(productIds) {
+        if (!productIds || productIds.length === 0) return;
+        
+        // Show loading state
+        $('#add-to-cart-status').html('Adding products to cart...').show();
+        
+        // Process products sequentially instead of in parallel
+        var index = 0;
+        var successCount = 0;
+        
+        function addNextProduct() {
+            if (index >= productIds.length) {
+                // All products processed
+                $('#add-to-cart-status').html(successCount + ' products added to cart! <a href="' + wc_add_to_cart_params.cart_url + '">View Cart</a>');
+                
+                // Hide the message after 5 seconds
+                setTimeout(function() {
+                    $('#add-to-cart-status').fadeOut();
+                }, 5000);
+                
+                // Update cart fragments
+                $(document.body).trigger('wc_fragment_refresh');
+                return;
+            }
+            
+            var productId = productIds[index];
+            
+            $.ajax({
+                url: wc_add_to_cart_params.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'add_to_cart_custom',
+                    product_id: productId,
+                    quantity: 1,
+                    nonce: wc_add_to_cart_params.nonce
+                },
+                success: function(response) {
+                    if (response.success) {
+                        successCount++;
+                    }
+                    
+                    // Update status message
+                    $('#add-to-cart-status').html('Adding products to cart... (' + (index + 1) + '/' + productIds.length + ')');
+                    
+                    // Process next product
+                    index++;
+                    setTimeout(addNextProduct, 300); // Add a small delay between requests
+                },
+                error: function() {
+                    // Continue with next product even if there's an error
+                    index++;
+                    setTimeout(addNextProduct, 300);
+                }
+            });
+        }
+        
+        // Start adding products
+        addNextProduct();
+    }
+});
+</script> 
