@@ -984,30 +984,13 @@ class Product_Recommendations_Public {
 	 * Display customer recommendations content
 	 */
 	public function my_recommendations_content() {
-		global $wpdb;
-		$user_id = get_current_user_id();
+		global $wp;
 		
-		// Get customer ID for this user
-		$customer_id = $wpdb->get_var($wpdb->prepare(
-			"SELECT id FROM {$wpdb->prefix}pr_customers WHERE user_id = %d",
-			$user_id
-		));
-		
-		if (!$customer_id) {
-			echo '<p>' . __('No recommendations found.', 'product-recommendations') . '</p>';
-			return;
+		// Check if we're viewing a specific team member's recommendations
+		if (isset($wp->query_vars['my-recommendations']) && !empty($wp->query_vars['my-recommendations'])) {
+			// Set the team member ID for use in the template
+			set_query_var('team_member_id', intval($wp->query_vars['my-recommendations']));
 		}
-		
-		// Get recommendations for this customer
-		$recommendations = $wpdb->get_results($wpdb->prepare(
-			"SELECT r.*, p.post_title as product_name, rm.name as room_name
-			 FROM {$wpdb->prefix}pr_recommendations r
-			 LEFT JOIN {$wpdb->posts} p ON r.product_id = p.ID
-			 LEFT JOIN {$wpdb->prefix}pr_rooms rm ON r.room_id = rm.id
-			 WHERE r.customer_id = %d
-			 ORDER BY COALESCE(r.room_id, 0), r.date_created DESC",
-			$customer_id
-		));
 		
 		// Include the template
 		include plugin_dir_path(__FILE__) . 'partials/customer-recommendations.php';

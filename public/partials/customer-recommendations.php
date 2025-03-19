@@ -24,13 +24,16 @@ $team_members = $wpdb->get_results($wpdb->prepare(
     $user_id
 ));
 
-// Get all product IDs for "Add All to Cart" functionality
-$all_product_ids = array();
-foreach ($recommendations as $recommendation) {
-    if (!empty($recommendation->product_id)) {
-        $all_product_ids[] = $recommendation->product_id;
-    }
+// Check if we're viewing a specific team member's recommendations
+$team_member_id = get_query_var('team_member_id');
+
+if (!empty($team_member_id)) {
+    // We're viewing a specific team member's recommendations
+    include(plugin_dir_path(__FILE__) . 'team-member-recommendations.php');
+    return;
 }
+
+// Main recommendations page - only show team members list
 ?>
 
 <div class="woocommerce-account-content">
@@ -39,7 +42,7 @@ foreach ($recommendations as $recommendation) {
     <div class="woocommerce-notices-wrapper"></div>
     
     <?php if (!empty($team_members)): ?>
-        <div class="team-members-section mb-5">
+        <div class="team-members-section">
             <h3 class="title is-5 mb-3"><?php esc_html_e('View Recommendations from:', 'product-recommendations'); ?></h3>
             <table class="woocommerce-table shop_table team-members-table">
                 <thead>
@@ -53,7 +56,7 @@ foreach ($recommendations as $recommendation) {
                         <tr>
                             <td><?php echo esc_html($team_member->team_member_name); ?></td>
                             <td>
-                                <a href="<?php echo esc_url(add_query_arg('team_member', $team_member->team_member_id)); ?>" class="button">
+                                <a href="<?php echo esc_url(wc_get_account_endpoint_url('my-recommendations/' . $team_member->team_member_id)); ?>" class="button">
                                     <?php esc_html_e('View Recommendations', 'product-recommendations'); ?>
                                 </a>
                             </td>
@@ -62,161 +65,10 @@ foreach ($recommendations as $recommendation) {
                 </tbody>
             </table>
         </div>
+    <?php else: ?>
+        <p><?php esc_html_e('You don\'t have any recommendations yet.', 'product-recommendations'); ?></p>
     <?php endif; ?>
-    
-    <?php 
-    // Check if we're filtering by team member
-    $team_member_filter = isset($_GET['team_member']) ? intval($_GET['team_member']) : 0;
-    
-    // If filtering, show only recommendations from that team member
-    if ($team_member_filter) {
-        $filtered_recommendations = array();
-        foreach ($recommendations as $recommendation) {
-            if ($recommendation->team_member_id == $team_member_filter) {
-                $filtered_recommendations[] = $recommendation;
-            }
-        }
-        $recommendations = $filtered_recommendations;
-        
-        // Get team member name
-        $team_member_name = '';
-        foreach ($team_members as $team_member) {
-            if ($team_member->team_member_id == $team_member_filter) {
-                $team_member_name = $team_member->team_member_name;
-                break;
-            }
-        }
-        
-        if ($team_member_name) {
-            echo '<h3 class="title is-4 mb-4">' . sprintf(esc_html__('Recommendations from %s', 'product-recommendations'), esc_html($team_member_name)) . '</h3>';
-        }
-    }
-    ?>
-    
-    <?php if (!empty($recommendations)): ?>
-        <div class="add-all-actions mb-4">
-            <button class="button add-all-to-cart" data-products="<?php echo esc_attr(json_encode($all_product_ids)); ?>">
-                <?php esc_html_e('Add All Products to Cart', 'product-recommendations'); ?>
-            </button>
-        </div>
-    <?php endif; ?>
-    
-    <?php
-    // Group recommendations by room
-    $recommendations_by_room = array();
-    $general_recommendations = array();
-    
-    foreach ($recommendations as $recommendation) {
-        if (!empty($recommendation->room_id)) {
-            if (!isset($recommendations_by_room[$recommendation->room_id])) {
-                $recommendations_by_room[$recommendation->room_id] = array(
-                    'name' => $recommendation->room_name,
-                    'recommendations' => array(),
-                    'product_ids' => array()
-                );
-            }
-            $recommendations_by_room[$recommendation->room_id]['recommendations'][] = $recommendation;
-            $recommendations_by_room[$recommendation->room_id]['product_ids'][] = $recommendation->product_id;
-        } else {
-            $general_recommendations[] = $recommendation;
-        }
-    }
-    
-    // Get product IDs for general recommendations
-    $general_product_ids = array();
-    foreach ($general_recommendations as $recommendation) {
-        $general_product_ids[] = $recommendation->product_id;
-    }
-    
-    // Display general recommendations first
-    if (!empty($general_recommendations)): ?>
-        <div class="room-section">
-            <div class="room-header is-flex is-justify-content-space-between is-align-items-center mb-3">
-                <h3 class="title is-4 is-capitalized mb-0"><?php esc_html_e('General Recommendations', 'product-recommendations'); ?></h3>
-                <?php if (!empty($general_product_ids)): ?>
-                    <button class="button add-room-to-cart" data-products="<?php echo esc_attr(json_encode($general_product_ids)); ?>">
-                        <?php esc_html_e('Add All to Cart', 'product-recommendations'); ?>
-                    </button>
-                <?php endif; ?>
-            </div>
-            <?php display_customer_recommendations_table($general_recommendations); ?>
-        </div>
-    <?php endif;
-    
-    // Display room-specific recommendations
-    foreach ($recommendations_by_room as $room_id => $room_data): 
-        if (!empty($room_data['name'])): ?>
-            <div class="room-section mt-6">
-                <div class="room-header is-flex is-justify-content-space-between is-align-items-center mb-3">
-                    <h3 class="title is-4 is-capitalized mb-0"><?php echo esc_html($room_data['name']); ?></h3>
-                    <?php if (!empty($room_data['product_ids'])): ?>
-                        <button class="button add-room-to-cart" data-products="<?php echo esc_attr(json_encode($room_data['product_ids'])); ?>">
-                            <?php esc_html_e('Add All to Cart', 'product-recommendations'); ?>
-                        </button>
-                    <?php endif; ?>
-                </div>
-                <?php display_customer_recommendations_table($room_data['recommendations']); ?>
-            </div>
-        <?php endif;
-    endforeach; ?>
-    
-    <div id="add-to-cart-status" class="woocommerce-message" style="display: none;"></div>
 </div>
-
-<?php
-// Helper function to display recommendations table
-function display_customer_recommendations_table($recommendations) {
-    ?>
-    <table class="woocommerce-table shop_table recommendations-table">
-        <thead>
-            <tr>
-                <th class="product-thumbnail"><?php esc_html_e('Image', 'product-recommendations'); ?></th>
-                <th><?php esc_html_e('Product', 'product-recommendations'); ?></th>
-                <th><?php esc_html_e('Date Added', 'product-recommendations'); ?></th>
-                <th><?php esc_html_e('Notes', 'product-recommendations'); ?></th>
-                <th><?php esc_html_e('Actions', 'product-recommendations'); ?></th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php 
-            if (empty($recommendations)): ?>
-                <tr>
-                    <td colspan="5" class="woocommerce-no-items"><?php esc_html_e('No recommendations found', 'product-recommendations'); ?></td>
-                </tr>
-            <?php else:
-                foreach ($recommendations as $recommendation): 
-                    $product = wc_get_product($recommendation->product_id);
-                    $image_url = $product ? wp_get_attachment_image_url($product->get_image_id(), 'thumbnail') : wc_placeholder_img_src('thumbnail');
-                    $price_html = $product ? $product->get_price_html() : '';
-                ?>
-                    <tr>
-                        <td class="product-thumbnail">
-                            <img src="<?php echo esc_url($image_url); ?>" alt="<?php echo esc_attr($recommendation->product_name); ?>" />
-                        </td>
-                        <td>
-                            <div class="product-info">
-                                <div class="product-name"><?php echo esc_html($recommendation->product_name); ?></div>
-                                <div class="product-price"><?php echo $price_html; ?></div>
-                            </div>
-                        </td>
-                        <td><?php echo esc_html(date_i18n(get_option('date_format'), strtotime($recommendation->date_created))); ?></td>
-                        <td><?php echo esc_html($recommendation->notes); ?></td>
-                        <td class="is-flex is-2">
-                            <a href="<?php echo esc_url(get_permalink($recommendation->product_id)); ?>" class="button is-text ">
-                                <?php esc_html_e('View Product', 'product-recommendations'); ?>
-                            </a>
-                            <a href="<?php echo esc_url(add_query_arg('add-to-cart', $recommendation->product_id, wc_get_cart_url())); ?>" class="button add-single-to-cart" data-product-id="<?php echo esc_attr($recommendation->product_id); ?>">
-                                <?php esc_html_e('Add to Cart', 'product-recommendations'); ?>
-                            </a>
-                        </td>
-                    </tr>
-                <?php endforeach;
-            endif; ?>
-        </tbody>
-    </table>
-    <?php
-}
-?>
 
 <style>
 
