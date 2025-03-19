@@ -150,7 +150,7 @@ class Product_Recommendations_Public {
 				'ajax_url' => admin_url('admin-ajax.php'),
 				'nonce' => wp_create_nonce('product_search_nonce'),
 				'texts' => array(
-					'general_recommendations' => __('General Recommendations', 'product-recommendations'),
+					'general_recommendations' => __('Core Recommendations', 'product-recommendations'),
 					'current_recommendations' => __('Current Recommendations', 'product-recommendations'),
 					'image' => __('Image', 'product-recommendations'),
 					'product' => __('Product', 'product-recommendations'),

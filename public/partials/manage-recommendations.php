@@ -171,7 +171,7 @@ $ajax_nonce = wp_create_nonce('product_search_nonce');
                                 <div class="control">
                                     <div class="select">
                                         <select id="recommendation_room" name="recommendation_room">
-                                            <option value=""><?php esc_html_e('General Recommendations', 'product-recommendations'); ?></option>
+                                            <option value=""><?php esc_html_e('Core Recommendations', 'product-recommendations'); ?></option>
                                             <?php
                                             // Get rooms for current customer
                                             $rooms = $wpdb->get_results($wpdb->prepare(
@@ -223,13 +223,13 @@ $ajax_nonce = wp_create_nonce('product_search_nonce');
         }
         
         // After grouping
-        error_log('General recommendations count: ' . count($general_recommendations));
+        error_log('Core recommendations count: ' . count($general_recommendations));
         error_log('Room recommendations count: ' . count($recommendations_by_room));
         error_log('Room recommendations data: ' . print_r($recommendations_by_room, true));
         
-        // Display general recommendations first
+        // Display core recommendations first
         if (!empty($general_recommendations)): ?>
-            <h3 class="title is-4 is-capitalized"><?php esc_html_e('General Recommendations', 'product-recommendations'); ?></h3>
+            <h3 class="title is-4 is-capitalized"><?php esc_html_e('Core Recommendations', 'product-recommendations'); ?></h3>
             <?php display_recommendations_table($general_recommendations); ?>
         <?php endif;
         

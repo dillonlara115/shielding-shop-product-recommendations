@@ -201,17 +201,17 @@ if (!function_exists('display_customer_recommendations_table')) {
             }
         }
         
-        // Get product IDs for general recommendations
+        // Get product IDs for core recommendations
         $general_product_ids = array();
         foreach ($general_recommendations as $recommendation) {
             $general_product_ids[] = $recommendation->product_id;
         }
         
-        // Display general recommendations first
+        // Display core recommendations first
         if (!empty($general_recommendations)): ?>
             <div class="room-section">
                 <div class="room-header mb-3">
-                    <h3 class="title is-4 is-capitalized mb-0"><?php esc_html_e('General Recommendations', 'product-recommendations'); ?></h3>
+                    <h3 class="title is-4 is-capitalized mb-0"><?php esc_html_e('Core Recommendations', 'product-recommendations'); ?></h3>
                 </div>
                 <?php display_customer_recommendations_table($general_recommendations, $general_product_ids); ?>
             </div>

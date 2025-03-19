@@ -175,17 +175,17 @@
                             `);
                         }
                     } else {
-                        // Add to general recommendations
-                        let generalSection = $('.existing-recommendations h3:contains("General Recommendations")');
+                        // Add to core recommendations
+                        let generalSection = $('.existing-recommendations h3:contains("Core Recommendations")');
                         if (generalSection.length) {
                             const $tbody = generalSection.next('table').find('tbody');
                             // Remove "no items" row if it exists
                             $tbody.find('.woocommerce-no-items').closest('tr').remove();
                             $tbody.prepend(newRow);
                         } else {
-                            // Create general recommendations section if it doesn't exist
+                            // Create core recommendations section if it doesn't exist
                             $('.existing-recommendations').prepend(`
-                                <h3 class="title is-4">General Recommendations</h3>
+                                <h3 class="title is-4">Core Recommendations</h3>
                                 <table class="woocommerce-table shop_table recommendations-table">
                                     <thead>
                                         <tr>
@@ -264,7 +264,7 @@
                                 
                                 // If this was in a room section (has a title), remove the whole section
                                 const $title = $table.prev('h3');
-                                if ($title.length && !$title.text().includes('General Recommendations')) {
+                                if ($title.length && !$title.text().includes('Core Recommendations')) {
                                     $title.fadeOut(300, function() {
                                         $(this).remove();
                                     });
