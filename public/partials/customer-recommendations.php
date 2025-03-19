@@ -10,6 +10,20 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+global $wpdb;
+$user_id = get_current_user_id();
+
+// Get all team members who have recommended products to this user
+$team_members = $wpdb->get_results($wpdb->prepare(
+    "SELECT DISTINCT r.team_member_id, u.display_name as team_member_name
+     FROM {$wpdb->prefix}pr_recommendations r
+     JOIN {$wpdb->prefix}pr_customers c ON r.customer_id = c.id
+     JOIN {$wpdb->users} u ON r.team_member_id = u.ID
+     WHERE c.user_id = %d
+     ORDER BY u.display_name",
+    $user_id
+));
+
 // Get all product IDs for "Add All to Cart" functionality
 $all_product_ids = array();
 foreach ($recommendations as $recommendation) {
@@ -23,6 +37,61 @@ foreach ($recommendations as $recommendation) {
     <h2><?php esc_html_e('My Recommendations', 'product-recommendations'); ?></h2>
     
     <div class="woocommerce-notices-wrapper"></div>
+    
+    <?php if (!empty($team_members)): ?>
+        <div class="team-members-section mb-5">
+            <h3 class="title is-5 mb-3"><?php esc_html_e('View Recommendations from:', 'product-recommendations'); ?></h3>
+            <table class="woocommerce-table shop_table team-members-table">
+                <thead>
+                    <tr>
+                        <th><?php esc_html_e('Team Member', 'product-recommendations'); ?></th>
+                        <th><?php esc_html_e('Actions', 'product-recommendations'); ?></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($team_members as $team_member): ?>
+                        <tr>
+                            <td><?php echo esc_html($team_member->team_member_name); ?></td>
+                            <td>
+                                <a href="<?php echo esc_url(add_query_arg('team_member', $team_member->team_member_id)); ?>" class="button">
+                                    <?php esc_html_e('View Recommendations', 'product-recommendations'); ?>
+                                </a>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    <?php endif; ?>
+    
+    <?php 
+    // Check if we're filtering by team member
+    $team_member_filter = isset($_GET['team_member']) ? intval($_GET['team_member']) : 0;
+    
+    // If filtering, show only recommendations from that team member
+    if ($team_member_filter) {
+        $filtered_recommendations = array();
+        foreach ($recommendations as $recommendation) {
+            if ($recommendation->team_member_id == $team_member_filter) {
+                $filtered_recommendations[] = $recommendation;
+            }
+        }
+        $recommendations = $filtered_recommendations;
+        
+        // Get team member name
+        $team_member_name = '';
+        foreach ($team_members as $team_member) {
+            if ($team_member->team_member_id == $team_member_filter) {
+                $team_member_name = $team_member->team_member_name;
+                break;
+            }
+        }
+        
+        if ($team_member_name) {
+            echo '<h3 class="title is-4 mb-4">' . sprintf(esc_html__('Recommendations from %s', 'product-recommendations'), esc_html($team_member_name)) . '</h3>';
+        }
+    }
+    ?>
     
     <?php if (!empty($recommendations)): ?>
         <div class="add-all-actions mb-4">
@@ -150,49 +219,7 @@ function display_customer_recommendations_table($recommendations) {
 ?>
 
 <style>
-.woocommerce .button.is-text {
-    background: none !important;
-    border: none !important;
-    color: #555 !important;
-    letter-spacing: 0 !important;
-    text-transform: capitalize !important;
-}
-.woocommerce a.button, .woocommerce .button {
-    font-size: 14px !important;
-    padding: 10px 15px !important;
-}
-.is-flex.is-2 {
-    gap: 1rem;
-}
-.product-info {
-    display: flex;
-    flex-direction: column;
-}
-.product-name {
-    font-weight: bold;
-    margin-bottom: 5px;
-}
-.product-price {
-    color: #666;
-    font-size: 0.8em;
-}
-.room-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-.add-all-actions {
-    text-align: right;
-    margin-bottom: 2rem;
-}
-#add-to-cart-status {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    z-index: 1000;
-    max-width: 300px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-}
+
 </style>
 
 <script type="text/javascript">
