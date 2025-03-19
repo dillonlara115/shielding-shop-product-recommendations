@@ -156,3 +156,21 @@
 .add-all-cell {
     text-align: right;
 }
+
+.private-product-label {
+    display: inline-block;
+    background-color: #f8e8ff;
+    color: #6a1b9a;
+    font-size: 0.7em;
+    padding: 2px 5px;
+    border-radius: 3px;
+    margin-left: 5px;
+    vertical-align: middle;
+    font-weight: 600;
+}
+
+/* Make private products stand out in the search results */
+.product-result[data-product*="\"is_private\":true"] {
+    background-color: #faf5ff;
+    border-left: 3px solid #9c27b0;
+}

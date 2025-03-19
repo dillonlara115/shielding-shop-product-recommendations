@@ -51,6 +51,8 @@ foreach ($recommendations as $recommendation) {
 // Define the display_customer_recommendations_table function
 if (!function_exists('display_customer_recommendations_table')) {
     function display_customer_recommendations_table($recommendations, $room_product_ids = array()) {
+        $placeholder_image = '/wp-content/uploads/2023/09/product-placeholder.png';
+        
         // Calculate subtotal
         $subtotal = 0;
         $has_variable_pricing = false;
@@ -98,9 +100,11 @@ if (!function_exists('display_customer_recommendations_table')) {
                 <?php else:
                     foreach ($recommendations as $recommendation): 
                         $product = wc_get_product($recommendation->product_id);
-                        $image_url = $product ? wp_get_attachment_image_url($product->get_image_id(), 'thumbnail') : wc_placeholder_img_src('thumbnail');
+                        $image_id = $product ? $product->get_image_id() : 0;
+                        $image_url = $image_id ? wp_get_attachment_image_url($image_id, 'thumbnail') : $placeholder_image;
                         $price_html = $product ? $product->get_price_html() : '';
                         $product_permalink = get_permalink($recommendation->product_id);
+                        $is_private = $product && $product->get_status() === 'private';
                     ?>
                         <tr>
                             <td class="product-thumbnail">
@@ -114,6 +118,9 @@ if (!function_exists('display_customer_recommendations_table')) {
                                         <a href="<?php echo esc_url($product_permalink); ?>">
                                             <?php echo esc_html($recommendation->product_name); ?>
                                         </a>
+                                        <?php if ($is_private): ?>
+                                            <span class="private-product-label">Member Exclusive</span>
+                                        <?php endif; ?>
                                     </div>
                                     <div class="product-price"><?php echo $price_html; ?></div>
                                 </div>

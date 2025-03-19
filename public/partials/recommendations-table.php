@@ -1,5 +1,6 @@
 <?php
 error_log('Displaying recommendations table. Count: ' . count($recommendations));
+$placeholder_image = '/wp-content/uploads/2023/09/product-placeholder.png';
 ?>
 <table class="woocommerce-table shop_table recommendations-table">
     <thead>
@@ -22,8 +23,10 @@ error_log('Displaying recommendations table. Count: ' . count($recommendations))
             foreach ($recommendations as $recommendation): 
                 error_log('Processing recommendation in table: ' . print_r($recommendation, true));
                 $product = wc_get_product($recommendation->product_id);
-                $image_url = $product ? wp_get_attachment_image_url($product->get_image_id(), 'thumbnail') : wc_placeholder_img_src('thumbnail');
+                $image_id = $product ? $product->get_image_id() : 0;
+                $image_url = $image_id ? wp_get_attachment_image_url($image_id, 'thumbnail') : $placeholder_image;
                 $price_html = $product ? $product->get_price_html() : '';
+                $is_private = $product && $product->get_status() === 'private';
             ?>
                 <tr data-id="<?php echo esc_attr($recommendation->id); ?>">
                     <td class="product-thumbnail">
@@ -31,7 +34,12 @@ error_log('Displaying recommendations table. Count: ' . count($recommendations))
                     </td>
                     <td>
                         <div class="product-info">
-                            <div class="product-name"><?php echo esc_html($recommendation->product_name); ?></div>
+                            <div class="product-name">
+                                <?php echo esc_html($recommendation->product_name); ?>
+                                <?php if ($is_private): ?>
+                                    <span class="private-product-label">Member Exclusive</span>
+                                <?php endif; ?>
+                            </div>
                             <div class="product-price"><?php echo $price_html; ?></div>
                         </div>
                     </td>

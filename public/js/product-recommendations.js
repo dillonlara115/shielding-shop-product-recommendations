@@ -38,11 +38,14 @@
                 if (response.success && response.data.length > 0) {
                     resultsContainer.html('');
                     response.data.forEach(function(product) {
+                        // Add member exclusive label if product is private
+                        const privateLabel = product.is_private ? '<span class="private-product-label">Member Exclusive</span>' : '';
+                        
                         resultsContainer.append(`
                             <div class="product-result" data-product='${JSON.stringify(product)}'>
                                 <div class="product-result-image" style="background-image: url('${product.image}');"></div>
                                 <div class="product-result-info">
-                                    <div class="product-result-name">${product.name}</div>
+                                    <div class="product-result-name">${product.name} ${privateLabel}</div>
                                     <div class="product-result-price">${product.price_html}</div>
                                 </div>
                             </div>

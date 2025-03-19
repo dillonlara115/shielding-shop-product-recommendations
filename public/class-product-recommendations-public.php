@@ -450,28 +450,38 @@ class Product_Recommendations_Public {
 	}
 
 	/**
-	 * Handle AJAX product search
+	 * AJAX handler for product search
 	 */
 	public function search_products_ajax() {
-		// Verify nonce
-		if (!check_ajax_referer('product_search_nonce', 'nonce', false)) {
-			wp_send_json_error('Invalid nonce');
+		check_ajax_referer('product_search_nonce', 'nonce');
+		
+		$search_term = isset($_POST['search']) ? sanitize_text_field($_POST['search']) : '';
+		$placeholder_image = '/wp-content/uploads/2023/09/product-placeholder.png';
+		
+		if (empty($search_term)) {
+			wp_send_json_error('Search term is required');
+			return;
 		}
 		
-		// Verify user can search
-		if (!current_user_can('read')) {
-			wp_send_json_error('Unauthorized');
-		}
+		// Check if current user is a team member
+		$current_user_id = get_current_user_id();
+		$is_team_member = current_user_can('manage_options') || current_user_can('edit_shop_orders');
 		
-		$search = sanitize_text_field($_POST['search']);
-		
-		// Search products
+		// Set up the query arguments
 		$args = array(
-			'post_type' => 'product',
-			'post_status' => 'publish',
-			's' => $search,
-			'posts_per_page' => 10
+			'post_type'      => 'product',
+			'posts_per_page' => 10,
+			's'              => $search_term,
+			'orderby'        => 'title',
+			'order'          => 'ASC',
 		);
+		
+		// Include private products if user is a team member
+		if ($is_team_member) {
+			$args['post_status'] = array('publish', 'private');
+		} else {
+			$args['post_status'] = 'publish';
+		}
 		
 		$products_query = new WP_Query($args);
 		$products = array();
@@ -479,21 +489,27 @@ class Product_Recommendations_Public {
 		if ($products_query->have_posts()) {
 			while ($products_query->have_posts()) {
 				$products_query->the_post();
-				$product = wc_get_product(get_the_ID());
+				$product_id = get_the_ID();
+				$product = wc_get_product($product_id);
 				
-				if (!$product) continue;
-				
-				$products[] = array(
-					'id' => $product->get_id(),
-					'name' => $product->get_name(),
-					'price' => $product->get_price(),
-					'price_html' => $product->get_price_html(),
-					'image' => wp_get_attachment_image_url($product->get_image_id(), 'thumbnail') ?: wc_placeholder_img_src('thumbnail')
-				);
+				if ($product) {
+					$image_id = $product->get_image_id();
+					$image_url = $image_id ? wp_get_attachment_image_url($image_id, 'thumbnail') : $placeholder_image;
+					
+					$products[] = array(
+						'id'        => $product_id,
+						'name'      => $product->get_name(),
+						'price'     => $product->get_price(),
+						'price_html' => $product->get_price_html(),
+						'image'     => $image_url,
+						'status'    => $product->get_status(),
+						'is_private' => $product->get_status() === 'private'
+					);
+				}
 			}
+			wp_reset_postdata();
 		}
 		
-		wp_reset_postdata();
 		wp_send_json_success($products);
 	}
 
