@@ -159,7 +159,7 @@
                             console.log('Creating new room section'); // Debug log
                             // Create new room section if it doesn't exist
                             $('.existing-recommendations').append(`
-                                <h3 class="title is-4 mt-6">${roomName}</h3>
+                                <h3 class="title is-2 mt-6">${roomName}</h3>
                                 <table class="woocommerce-table shop_table recommendations-table">
                                     <thead>
                                         <tr>
@@ -188,7 +188,7 @@
                         } else {
                             // Create core recommendations section if it doesn't exist
                             $('.existing-recommendations').prepend(`
-                                <h3 class="title is-4">Core Recommendations</h3>
+                                <h3 class="title is-2">Core Recommendations</h3>
                                 <table class="woocommerce-table shop_table recommendations-table">
                                     <thead>
                                         <tr>

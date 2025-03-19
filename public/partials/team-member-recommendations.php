@@ -10,6 +10,9 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// Include the shared recommendations table function
+require_once plugin_dir_path(__FILE__) . 'recommendations-table-shared.php';
+
 // Get team member details
 $team_member_details = get_userdata($team_member_id);
 if (!$team_member_details) {
@@ -47,122 +50,6 @@ foreach ($recommendations as $recommendation) {
         $all_product_ids[] = $recommendation->product_id;
     }
 }
-
-// Define the display_customer_recommendations_table function
-if (!function_exists('display_customer_recommendations_table')) {
-    function display_customer_recommendations_table($recommendations, $room_product_ids = array()) {
-        $placeholder_image = '/wp-content/uploads/2023/09/product-placeholder.png';
-        
-        // Calculate subtotal
-        $subtotal = 0;
-        $has_variable_pricing = false;
-        $product_prices = array();
-        
-        foreach ($recommendations as $recommendation) {
-            $product = wc_get_product($recommendation->product_id);
-            if ($product) {
-                if ($product->is_type('variable')) {
-                    $has_variable_pricing = true;
-                    // Get min and max prices for variable products
-                    $min_price = $product->get_variation_price('min');
-                    $max_price = $product->get_variation_price('max');
-                    if ($min_price == $max_price) {
-                        $product_prices[] = $min_price;
-                    } else {
-                        // Use minimum price for subtotal calculation
-                        $product_prices[] = $min_price;
-                    }
-                } else {
-                    $product_prices[] = $product->get_price();
-                }
-            }
-        }
-        
-        // Calculate minimum subtotal
-        $subtotal = array_sum($product_prices);
-        ?>
-        <table class="woocommerce-table shop_table recommendations-table">
-            <thead>
-                <tr>
-                    <th class="product-thumbnail"><?php esc_html_e('Image', 'product-recommendations'); ?></th>
-                    <th><?php esc_html_e('Product', 'product-recommendations'); ?></th>
-                    <th><?php esc_html_e('Date Added', 'product-recommendations'); ?></th>
-                    <th><?php esc_html_e('Notes', 'product-recommendations'); ?></th>
-                    <th><?php esc_html_e('Actions', 'product-recommendations'); ?></th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php 
-                if (empty($recommendations)): ?>
-                    <tr>
-                        <td colspan="5" class="woocommerce-no-items"><?php esc_html_e('No recommendations found', 'product-recommendations'); ?></td>
-                    </tr>
-                <?php else:
-                    foreach ($recommendations as $recommendation): 
-                        $product = wc_get_product($recommendation->product_id);
-                        $image_id = $product ? $product->get_image_id() : 0;
-                        $image_url = $image_id ? wp_get_attachment_image_url($image_id, 'thumbnail') : $placeholder_image;
-                        $price_html = $product ? $product->get_price_html() : '';
-                        $product_permalink = get_permalink($recommendation->product_id);
-                        $is_private = $product && $product->get_status() === 'private';
-                    ?>
-                        <tr>
-                            <td class="product-thumbnail">
-                                <a href="<?php echo esc_url($product_permalink); ?>">
-                                    <img src="<?php echo esc_url($image_url); ?>" alt="<?php echo esc_attr($recommendation->product_name); ?>" />
-                                </a>
-                            </td>
-                            <td>
-                                <div class="product-info">
-                                    <div class="product-name">
-                                        <a href="<?php echo esc_url($product_permalink); ?>">
-                                            <?php echo esc_html($recommendation->product_name); ?>
-                                        </a>
-                                        <?php if ($is_private): ?>
-                                            <span class="private-product-label">Member Exclusive</span>
-                                        <?php endif; ?>
-                                    </div>
-                                    <div class="product-price"><?php echo $price_html; ?></div>
-                                </div>
-                            </td>
-                            <td><?php echo esc_html(date_i18n(get_option('date_format'), strtotime($recommendation->date_created))); ?></td>
-                            <td><?php echo esc_html($recommendation->notes); ?></td>
-                            <td class="is-flex is-2">
-                                <a href="<?php echo esc_url($product_permalink); ?>" class="button is-text ">
-                                    <?php esc_html_e('View Product', 'product-recommendations'); ?>
-                                </a>
-                                <a href="<?php echo esc_url(add_query_arg('add-to-cart', $recommendation->product_id, wc_get_cart_url())); ?>" class="button add-single-to-cart" data-product-id="<?php echo esc_attr($recommendation->product_id); ?>">
-                                    <?php esc_html_e('Add to Cart', 'product-recommendations'); ?>
-                                </a>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                    
-                    <!-- Subtotal row -->
-                    <tr class="subtotal-row">
-                        <td colspan="3" class="subtotal-label">
-                            <strong><?php esc_html_e('Subtotal', 'product-recommendations'); ?></strong>
-                            <?php if ($has_variable_pricing): ?>
-                                <span class="variable-pricing-note">
-                                    <?php esc_html_e('(Minimum - some products have variable pricing)', 'product-recommendations'); ?>
-                                </span>
-                            <?php endif; ?>
-                        </td>
-                        <td class="subtotal-value">
-                            <strong><?php echo wc_price($subtotal); ?></strong>
-                        </td>
-                        <td class="add-all-cell">
-                            <button class="button add-room-to-cart" data-products="<?php echo esc_attr(json_encode($room_product_ids)); ?>">
-                                <?php esc_html_e('Add All to Cart', 'product-recommendations'); ?>
-                            </button>
-                        </td>
-                    </tr>
-                <?php endif; ?>
-            </tbody>
-        </table>
-        <?php
-    }
-}
 ?>
 
 <div class="woocommerce-account-content">
@@ -176,7 +63,7 @@ if (!function_exists('display_customer_recommendations_table')) {
         </a>
     </p>
     
-    <h3 class="title is-4 mb-4">
+    <h3 class="title is-2 mb-4">
         <?php printf(esc_html__('Recommendations from %s', 'product-recommendations'), esc_html($team_member_details->display_name)); ?>
     </h3>
     
@@ -214,13 +101,25 @@ if (!function_exists('display_customer_recommendations_table')) {
             $general_product_ids[] = $recommendation->product_id;
         }
         
+        // Set up context for customer view
+        $customer_context = array(
+            'view' => 'customer',
+            'show_actions' => true,
+            'show_status' => false,
+            'show_notes' => true,
+            'show_subtotal' => true
+        );
+        
         // Display core recommendations first
         if (!empty($general_recommendations)): ?>
             <div class="room-section">
                 <div class="room-header mb-3">
-                    <h3 class="title is-4 is-capitalized mb-0"><?php esc_html_e('Core Recommendations', 'product-recommendations'); ?></h3>
+                    <h3 class="title is-2 is-capitalized mb-0"><?php esc_html_e('Core Recommendations', 'product-recommendations'); ?></h3>
                 </div>
-                <?php display_customer_recommendations_table($general_recommendations, $general_product_ids); ?>
+                <?php 
+                $customer_context['room_product_ids'] = $general_product_ids;
+                display_recommendations_table($general_recommendations, $customer_context); 
+                ?>
             </div>
         <?php endif;
         
@@ -229,9 +128,12 @@ if (!function_exists('display_customer_recommendations_table')) {
             if (!empty($room_data['name'])): ?>
                 <div class="room-section mt-6">
                     <div class="room-header mb-3">
-                        <h3 class="title is-4 is-capitalized mb-0"><?php echo esc_html($room_data['name']); ?></h3>
+                        <h3 class="title is-2 is-capitalized mb-0"><?php echo esc_html($room_data['name']); ?></h3>
                     </div>
-                    <?php display_customer_recommendations_table($room_data['recommendations'], $room_data['product_ids']); ?>
+                    <?php 
+                    $customer_context['room_product_ids'] = $room_data['product_ids'];
+                    display_recommendations_table($room_data['recommendations'], $customer_context); 
+                    ?>
                 </div>
             <?php endif;
         endforeach;
