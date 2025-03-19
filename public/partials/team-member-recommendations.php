@@ -50,7 +50,34 @@ foreach ($recommendations as $recommendation) {
 
 // Define the display_customer_recommendations_table function
 if (!function_exists('display_customer_recommendations_table')) {
-    function display_customer_recommendations_table($recommendations) {
+    function display_customer_recommendations_table($recommendations, $room_product_ids = array()) {
+        // Calculate subtotal
+        $subtotal = 0;
+        $has_variable_pricing = false;
+        $product_prices = array();
+        
+        foreach ($recommendations as $recommendation) {
+            $product = wc_get_product($recommendation->product_id);
+            if ($product) {
+                if ($product->is_type('variable')) {
+                    $has_variable_pricing = true;
+                    // Get min and max prices for variable products
+                    $min_price = $product->get_variation_price('min');
+                    $max_price = $product->get_variation_price('max');
+                    if ($min_price == $max_price) {
+                        $product_prices[] = $min_price;
+                    } else {
+                        // Use minimum price for subtotal calculation
+                        $product_prices[] = $min_price;
+                    }
+                } else {
+                    $product_prices[] = $product->get_price();
+                }
+            }
+        }
+        
+        // Calculate minimum subtotal
+        $subtotal = array_sum($product_prices);
         ?>
         <table class="woocommerce-table shop_table recommendations-table">
             <thead>
@@ -73,21 +100,28 @@ if (!function_exists('display_customer_recommendations_table')) {
                         $product = wc_get_product($recommendation->product_id);
                         $image_url = $product ? wp_get_attachment_image_url($product->get_image_id(), 'thumbnail') : wc_placeholder_img_src('thumbnail');
                         $price_html = $product ? $product->get_price_html() : '';
+                        $product_permalink = get_permalink($recommendation->product_id);
                     ?>
                         <tr>
                             <td class="product-thumbnail">
-                                <img src="<?php echo esc_url($image_url); ?>" alt="<?php echo esc_attr($recommendation->product_name); ?>" />
+                                <a href="<?php echo esc_url($product_permalink); ?>">
+                                    <img src="<?php echo esc_url($image_url); ?>" alt="<?php echo esc_attr($recommendation->product_name); ?>" />
+                                </a>
                             </td>
                             <td>
                                 <div class="product-info">
-                                    <div class="product-name"><?php echo esc_html($recommendation->product_name); ?></div>
+                                    <div class="product-name">
+                                        <a href="<?php echo esc_url($product_permalink); ?>">
+                                            <?php echo esc_html($recommendation->product_name); ?>
+                                        </a>
+                                    </div>
                                     <div class="product-price"><?php echo $price_html; ?></div>
                                 </div>
                             </td>
                             <td><?php echo esc_html(date_i18n(get_option('date_format'), strtotime($recommendation->date_created))); ?></td>
                             <td><?php echo esc_html($recommendation->notes); ?></td>
                             <td class="is-flex is-2">
-                                <a href="<?php echo esc_url(get_permalink($recommendation->product_id)); ?>" class="button is-text ">
+                                <a href="<?php echo esc_url($product_permalink); ?>" class="button is-text ">
                                     <?php esc_html_e('View Product', 'product-recommendations'); ?>
                                 </a>
                                 <a href="<?php echo esc_url(add_query_arg('add-to-cart', $recommendation->product_id, wc_get_cart_url())); ?>" class="button add-single-to-cart" data-product-id="<?php echo esc_attr($recommendation->product_id); ?>">
@@ -95,8 +129,28 @@ if (!function_exists('display_customer_recommendations_table')) {
                                 </a>
                             </td>
                         </tr>
-                    <?php endforeach;
-                endif; ?>
+                    <?php endforeach; ?>
+                    
+                    <!-- Subtotal row -->
+                    <tr class="subtotal-row">
+                        <td colspan="3" class="subtotal-label">
+                            <strong><?php esc_html_e('Subtotal', 'product-recommendations'); ?></strong>
+                            <?php if ($has_variable_pricing): ?>
+                                <span class="variable-pricing-note">
+                                    <?php esc_html_e('(Minimum - some products have variable pricing)', 'product-recommendations'); ?>
+                                </span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="subtotal-value">
+                            <strong><?php echo wc_price($subtotal); ?></strong>
+                        </td>
+                        <td class="add-all-cell">
+                            <button class="button add-room-to-cart" data-products="<?php echo esc_attr(json_encode($room_product_ids)); ?>">
+                                <?php esc_html_e('Add All to Cart', 'product-recommendations'); ?>
+                            </button>
+                        </td>
+                    </tr>
+                <?php endif; ?>
             </tbody>
         </table>
         <?php
@@ -156,15 +210,10 @@ if (!function_exists('display_customer_recommendations_table')) {
         // Display general recommendations first
         if (!empty($general_recommendations)): ?>
             <div class="room-section">
-                <div class="room-header is-flex is-justify-content-space-between is-align-items-center mb-3">
+                <div class="room-header mb-3">
                     <h3 class="title is-4 is-capitalized mb-0"><?php esc_html_e('General Recommendations', 'product-recommendations'); ?></h3>
-                    <?php if (!empty($general_product_ids)): ?>
-                        <button class="button add-room-to-cart" data-products="<?php echo esc_attr(json_encode($general_product_ids)); ?>">
-                            <?php esc_html_e('Add All to Cart', 'product-recommendations'); ?>
-                        </button>
-                    <?php endif; ?>
                 </div>
-                <?php display_customer_recommendations_table($general_recommendations); ?>
+                <?php display_customer_recommendations_table($general_recommendations, $general_product_ids); ?>
             </div>
         <?php endif;
         
@@ -172,15 +221,10 @@ if (!function_exists('display_customer_recommendations_table')) {
         foreach ($recommendations_by_room as $room_id => $room_data): 
             if (!empty($room_data['name'])): ?>
                 <div class="room-section mt-6">
-                    <div class="room-header is-flex is-justify-content-space-between is-align-items-center mb-3">
+                    <div class="room-header mb-3">
                         <h3 class="title is-4 is-capitalized mb-0"><?php echo esc_html($room_data['name']); ?></h3>
-                        <?php if (!empty($room_data['product_ids'])): ?>
-                            <button class="button add-room-to-cart" data-products="<?php echo esc_attr(json_encode($room_data['product_ids'])); ?>">
-                                <?php esc_html_e('Add All to Cart', 'product-recommendations'); ?>
-                            </button>
-                        <?php endif; ?>
                     </div>
-                    <?php display_customer_recommendations_table($room_data['recommendations']); ?>
+                    <?php display_customer_recommendations_table($room_data['recommendations'], $room_data['product_ids']); ?>
                 </div>
             <?php endif;
         endforeach;
@@ -272,4 +316,4 @@ jQuery(document).ready(function($) {
         addNextProduct();
     }
 });
-</script> 
+</script>
