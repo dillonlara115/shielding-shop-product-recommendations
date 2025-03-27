@@ -142,6 +142,11 @@ function display_recommendations_table($recommendations, $context = array()) {
                                     <?php endif; ?>
                                 </div>
                                 <div class="product-price"><?php echo $price_html; ?></div>
+                                <?php if (!empty($recommendation->quantity) && $recommendation->quantity > 1): ?>
+                                    <div class="product-quantity">
+                                        <?php echo sprintf(_n('Quantity: %d item', 'Quantity: %d items', $recommendation->quantity, 'product-recommendations'), $recommendation->quantity); ?>
+                                    </div>
+                                <?php endif; ?>
                             </div>
                         </td>
                         <td><?php echo esc_html(date_i18n(get_option('date_format'), strtotime($recommendation->date_created))); ?></td>
@@ -161,18 +166,13 @@ function display_recommendations_table($recommendations, $context = array()) {
                         <?php if ($context['show_actions']): ?>
                             <td class="is-flex is-2">
                                 <?php if ($context['view'] === 'team_member'): ?>
-                                    <button class="button button-remove-recommendation" data-id="<?php echo esc_attr($recommendation->id); ?>">
-                                        <?php esc_html_e('Remove', 'product-recommendations'); ?>
+                                    <button class="button button-remove-recommendation" data-id="<?php echo esc_attr($recommendation->id); ?>" title="<?php esc_attr_e('Remove', 'product-recommendations'); ?>">
+                                        <span><?php esc_html_e('Remove', 'product-recommendations'); ?></span>
                                     </button>
                                 <?php elseif ($context['view'] === 'customer'): ?>
-                                    <a href="<?php echo esc_url($product_permalink); ?>" class="button is-text">
-                                        <?php esc_html_e('View Product', 'product-recommendations'); ?>
-                                    </a>
-                                    <a href="<?php echo esc_url(add_query_arg('add-to-cart', $recommendation->product_id, wc_get_cart_url())); ?>" 
-                                       class="button add-single-to-cart" 
-                                       data-product-id="<?php echo esc_attr($recommendation->product_id); ?>">
+                                    <button class="button add-to-cart-button" data-product-id="<?php echo esc_attr($recommendation->product_id); ?>">
                                         <?php esc_html_e('Add to Cart', 'product-recommendations'); ?>
-                                    </a>
+                                    </button>
                                 <?php endif; ?>
                             </td>
                         <?php endif; ?>

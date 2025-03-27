@@ -51,6 +51,7 @@ class Product_Recommendations_DB {
             status varchar(20) DEFAULT 'pending' NOT NULL,
             notes text,
             room_id bigint(20) DEFAULT NULL,
+            quantity int(11) DEFAULT 1 NOT NULL,
             PRIMARY KEY  (id),
             KEY customer_id (customer_id),
             KEY team_member_id (team_member_id),
@@ -60,5 +61,21 @@ class Product_Recommendations_DB {
         
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql);
+    }
+
+    /**
+     * Update database tables
+     */
+    public static function update_tables() {
+        global $wpdb;
+        
+        // Check if quantity column exists in recommendations table
+        $table_name = $wpdb->prefix . 'pr_recommendations';
+        $column_exists = $wpdb->get_results("SHOW COLUMNS FROM {$table_name} LIKE 'quantity'");
+        
+        // Add quantity column if it doesn't exist
+        if (empty($column_exists)) {
+            $wpdb->query("ALTER TABLE {$table_name} ADD COLUMN quantity int(11) DEFAULT 1 NOT NULL AFTER room_id");
+        }
     }
 } 

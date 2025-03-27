@@ -97,3 +97,14 @@ function pr_maybe_flush_rules() {
 	}
 }
 add_action('plugins_loaded', 'pr_maybe_flush_rules');
+
+// Add this to the existing plugin file
+function pr_update_database() {
+	// Check if we need to update the database
+	if (get_option('product_recommendations_db_version') !== PRODUCT_RECOMMENDATIONS_VERSION) {
+		require_once plugin_dir_path(__FILE__) . 'includes/class-product-recommendations-db.php';
+		Product_Recommendations_DB::update_tables();
+		update_option('product_recommendations_db_version', PRODUCT_RECOMMENDATIONS_VERSION);
+	}
+}
+add_action('plugins_loaded', 'pr_update_database', 5); // Run before other plugin code

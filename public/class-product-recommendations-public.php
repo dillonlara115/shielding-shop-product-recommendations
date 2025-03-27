@@ -76,6 +76,9 @@ class Product_Recommendations_Public {
 		// Add custom AJAX handler for adding products to cart
 		add_action('wp_ajax_add_to_cart_custom', array($this, 'add_to_cart_custom_ajax'));
 		add_action('wp_ajax_nopriv_add_to_cart_custom', array($this, 'add_to_cart_custom_ajax'));
+
+		// Register new AJAX handlers
+		$this->register_ajax_handlers();
 	}
 
 	/**
@@ -85,7 +88,14 @@ class Product_Recommendations_Public {
 		// Debug
 		error_log('Enqueuing styles for Product Recommendations');
 		
-	
+		// Load Font Awesome
+		wp_enqueue_style(
+			$this->plugin_name . '-fontawesome',
+			'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css',
+			array(),
+			'5.15.4'
+		);
+
 		// Load plugin-specific styles after frameworks
 		wp_enqueue_style(
 			$this->plugin_name,
@@ -456,7 +466,7 @@ class Product_Recommendations_Public {
 		check_ajax_referer('product_search_nonce', 'nonce');
 		
 		$search_term = isset($_POST['search']) ? sanitize_text_field($_POST['search']) : '';
-		$placeholder_image = '/wp-content/uploads/2023/09/product-placeholder.png';
+		$placeholder_image = 'http://shieldingshop.local/wp-content/uploads/2023/09/product-placeholder.png';
 		
 		if (empty($search_term)) {
 			wp_send_json_error('Search term is required');
@@ -503,7 +513,8 @@ class Product_Recommendations_Public {
 						'price_html' => $product->get_price_html(),
 						'image'     => $image_url,
 						'status'    => $product->get_status(),
-						'is_private' => $product->get_status() === 'private'
+						'is_private' => $product->get_status() === 'private',
+						'is_variable' => $product->is_type('variable')
 					);
 				}
 			}
@@ -514,150 +525,80 @@ class Product_Recommendations_Public {
 	}
 
 	/**
-	 * Handle AJAX add recommendation
+	 * AJAX handler for adding a recommendation
 	 */
 	public function add_recommendation_ajax() {
-		// Verify nonce
-		if (!check_ajax_referer('product_search_nonce', 'nonce', false)) {
-			wp_send_json_error('Invalid nonce');
+		check_ajax_referer('product_search_nonce', 'nonce');
+		
+		$customer_id = isset($_POST['customer_id']) ? intval($_POST['customer_id']) : 0;
+		$product_id = isset($_POST['product_id']) ? intval($_POST['product_id']) : 0;
+		$notes = isset($_POST['notes']) ? sanitize_textarea_field($_POST['notes']) : '';
+		$room_id = isset($_POST['room_id']) && !empty($_POST['room_id']) ? intval($_POST['room_id']) : null;
+		$quantity = isset($_POST['quantity']) ? max(1, intval($_POST['quantity'])) : 1;
+		
+		if (!$customer_id || !$product_id) {
+			wp_send_json_error('Missing required fields');
+			return;
 		}
 		
-		// Verify user can add recommendations
-		if (!current_user_can('read')) {
-			wp_send_json_error('Unauthorized');
-		}
-		
-		$customer_id = intval($_POST['customer_id']);
-		$product_id = intval($_POST['product_id']);
-		$notes = sanitize_textarea_field($_POST['notes']);
-		$room_id = !empty($_POST['room_id']) ? intval($_POST['room_id']) : null;
+		// Check if user has permission to add recommendation for this customer
+		global $wpdb;
 		$team_member_id = get_current_user_id();
 		
-		// Debug output
-		error_log('Adding recommendation with room_id: ' . var_export($room_id, true));
-		
-		// Validate customer exists and belongs to this team member
-		global $wpdb;
-		$customer_table = $wpdb->prefix . 'pr_customers';
-		
-		$customer = $wpdb->get_row($wpdb->prepare(
-			"SELECT * FROM $customer_table WHERE id = %d AND team_member_id = %d",
+		$customer_exists = $wpdb->get_var($wpdb->prepare(
+			"SELECT id FROM {$wpdb->prefix}pr_customers 
+			 WHERE id = %d AND team_member_id = %d",
 			$customer_id,
 			$team_member_id
 		));
 		
-		if (!$customer) {
-			wp_send_json_error('Invalid customer');
+		if (!$customer_exists) {
+			wp_send_json_error('You do not have permission to add recommendations for this customer');
+			return;
 		}
 		
-		// Validate product exists
-		$product = wc_get_product($product_id);
-		if (!$product) {
-			wp_send_json_error('Invalid product');
-		}
-		
-		// Check if this product is already recommended for this customer in the same room
-		$recommendations_table = $wpdb->prefix . 'pr_recommendations';
-		
-		$existing = $wpdb->get_var($wpdb->prepare(
-			"SELECT id FROM $recommendations_table 
-			 WHERE customer_id = %d 
-			 AND product_id = %d 
-			 AND (room_id = %d OR (room_id IS NULL AND %d IS NULL))",
-			$customer_id,
-			$product_id,
-			$room_id,
-			$room_id
-		));
-		
-		if ($existing) {
-			wp_send_json_error('This product is already recommended for this customer in this room');
-		}
-		
-		// If room_id is provided, verify it belongs to this customer
-		if ($room_id) {
-			$room = $wpdb->get_row($wpdb->prepare(
-				"SELECT id FROM {$wpdb->prefix}pr_rooms 
-				 WHERE id = %d AND customer_id = %d",
-				$room_id,
-				$customer_id
-			));
-			
-			if (!$room) {
-				wp_send_json_error('Invalid room');
-			}
-		}
-		
-		// Insert new recommendation
+		// Prepare data for insertion
 		$data = array(
 			'customer_id' => $customer_id,
 			'team_member_id' => $team_member_id,
 			'product_id' => $product_id,
 			'date_created' => current_time('mysql'),
 			'status' => 'pending',
-			'notes' => $notes
+			'notes' => $notes,
+			'quantity' => $quantity
 		);
 		
-		$formats = array(
-			'%d',  // customer_id
-			'%d',  // team_member_id
-			'%d',  // product_id
-			'%s',  // date_created
-			'%s',  // status
-			'%s'   // notes
-		);
+		// Format specifiers
+		$formats = array('%d', '%d', '%d', '%s', '%s', '%s', '%d');
 		
-		// Only add room_id if it's not empty
-		if (!empty($room_id)) {
+		// Add room_id if it's set
+		if ($room_id !== null) {
 			$data['room_id'] = $room_id;
-			$formats[] = '%d';  // room_id
+			$formats[] = '%d';
 		}
 		
+		// Insert recommendation
 		$result = $wpdb->insert(
-			$recommendations_table,
+			$wpdb->prefix . 'pr_recommendations',
 			$data,
 			$formats
 		);
 		
-		if ($result === false) {
-			wp_send_json_error('Failed to add recommendation: ' . $wpdb->last_error);
-		} else {
-			// Verify the insertion
-			$inserted = $wpdb->get_row($wpdb->prepare(
-				"SELECT * FROM $recommendations_table WHERE id = %d",
-				$wpdb->insert_id
-			));
-			error_log('Inserted recommendation: ' . print_r($inserted, true));
+		if ($result) {
+			$recommendation_id = $wpdb->insert_id;
 			
-			// Get the product details for the response
+			// Get product details
 			$product = wc_get_product($product_id);
+			$product_name = $product ? $product->get_name() : 'Product #' . $product_id;
 			
-			// Get room name if room_id is provided
-			$room_name = '';
-			if ($room_id) {
-				$room_name = $wpdb->get_var($wpdb->prepare(
-					"SELECT name FROM {$wpdb->prefix}pr_rooms WHERE id = %d",
-					$room_id
-				));
-			}
-
-			// Debug log
-			error_log('Room ID: ' . $room_id);
-			error_log('Room Name: ' . $room_name);
-
 			wp_send_json_success(array(
-				'message' => 'Recommendation added successfully!',
-				'recommendation' => array(
-					'id' => $wpdb->insert_id,
-					'product_name' => $product->get_name(),
-					'product_image' => wp_get_attachment_image_url($product->get_image_id(), 'thumbnail'),
-					'date_created' => date_i18n(get_option('date_format')),
-					'status' => 'pending',
-					'notes' => $notes,
-					'room_id' => $room_id,
-					'room_name' => $room_name
-				)
+				'message' => sprintf(__('Recommendation for "%s" added successfully', 'product-recommendations'), $product_name),
+				'recommendation_id' => $recommendation_id
 			));
+		} else {
+			// Log the error for debugging
+			error_log('Failed to add recommendation: ' . $wpdb->last_error);
+			wp_send_json_error('Failed to add recommendation: ' . $wpdb->last_error);
 		}
 	}
 
@@ -1033,5 +974,95 @@ class Product_Recommendations_Public {
 		}
 		
 		wp_die();
+	}
+
+	/**
+	 * AJAX handler for getting product variants
+	 */
+	public function get_product_variants_ajax() {
+		check_ajax_referer('product_search_nonce', 'nonce');
+		
+		$product_id = isset($_POST['product_id']) ? intval($_POST['product_id']) : 0;
+		$placeholder_image = 'http://shieldingshop.local/wp-content/uploads/2023/09/product-placeholder.png';
+		
+		if (!$product_id) {
+			wp_send_json_error('Product ID is required');
+			return;
+		}
+		
+		$product = wc_get_product($product_id);
+		
+		if (!$product || !$product->is_type('variable')) {
+			wp_send_json_error('Not a variable product');
+			return;
+		}
+		
+		$variations = $product->get_available_variations();
+		$variants = array();
+		
+		foreach ($variations as $variation) {
+			$variation_obj = wc_get_product($variation['variation_id']);
+			
+			if ($variation_obj && $variation_obj->is_purchasable()) {
+				$image_id = !empty($variation['image_id']) ? $variation['image_id'] : $product->get_image_id();
+				$image_url = $image_id ? wp_get_attachment_image_url($image_id, 'thumbnail') : $placeholder_image;
+				
+				// Build attribute summary
+				$attribute_summary = array();
+				foreach ($variation['attributes'] as $key => $value) {
+					$taxonomy = str_replace('attribute_', '', $key);
+					$term_name = $value;
+					
+					// If it's a taxonomy attribute, get the term name
+					if (taxonomy_exists($taxonomy)) {
+						$term = get_term_by('slug', $value, $taxonomy);
+						if ($term) {
+							$term_name = $term->name;
+						}
+					}
+					
+					$attribute_name = wc_attribute_label($taxonomy);
+					$attribute_summary[] = $attribute_name . ': ' . $term_name;
+				}
+				
+				$variants[] = array(
+					'id'               => $variation['variation_id'],
+					'parent_id'        => $product_id,
+					'name'             => $variation_obj->get_name(),
+					'price'            => $variation_obj->get_price(),
+					'price_html'       => $variation_obj->get_price_html(),
+					'image'            => $image_url,
+					'status'           => $variation_obj->get_status(),
+					'is_private'       => $variation_obj->get_status() === 'private',
+					'is_variable'      => false,
+					'is_variation'     => true,
+					'attributes'       => $variation['attributes'],
+					'attribute_summary' => implode(', ', $attribute_summary)
+				);
+			}
+		}
+		
+		wp_send_json_success($variants);
+	}
+
+	/**
+	 * Register new AJAX handlers
+	 */
+	public function register_ajax_handlers() {
+		// Existing handlers
+		add_action('wp_ajax_search_products', array($this, 'search_products_ajax'));
+		add_action('wp_ajax_add_recommendation', array($this, 'add_recommendation_ajax'));
+		add_action('wp_ajax_remove_recommendation', array($this, 'remove_recommendation_ajax'));
+		add_action('wp_ajax_search_users', array($this, 'search_users_ajax'));
+		add_action('wp_ajax_add_customer', array($this, 'add_customer_ajax'));
+		add_action('wp_ajax_add_room', array($this, 'add_room_ajax'));
+		add_action('wp_ajax_edit_room', array($this, 'edit_room_ajax'));
+		add_action('wp_ajax_remove_room', array($this, 'delete_room_ajax'));
+		add_action('wp_ajax_get_customer_rooms', array($this, 'get_customer_rooms_ajax'));
+		add_action('wp_ajax_add_to_cart_custom', array($this, 'add_to_cart_custom_ajax'));
+		add_action('wp_ajax_nopriv_add_to_cart_custom', array($this, 'add_to_cart_custom_ajax'));
+		
+		// New handler for product variants
+		add_action('wp_ajax_get_product_variants', array($this, 'get_product_variants_ajax'));
 	}
 }

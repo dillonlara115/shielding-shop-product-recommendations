@@ -43,11 +43,14 @@ $recommendations = $wpdb->get_results($wpdb->prepare(
     $team_member_id
 ));
 
-// Get all product IDs for "Add All to Cart" functionality
-$all_product_ids = array();
+// Get all product IDs and quantities for "Add All to Cart" functionality
+$room_products = array();
 foreach ($recommendations as $recommendation) {
     if (!empty($recommendation->product_id)) {
-        $all_product_ids[] = $recommendation->product_id;
+        $room_products[] = array(
+            'id' => $recommendation->product_id,
+            'quantity' => !empty($recommendation->quantity) ? (int)$recommendation->quantity : 1
+        );
     }
 }
 ?>
@@ -69,7 +72,7 @@ foreach ($recommendations as $recommendation) {
     
     <?php if (!empty($recommendations)): ?>
         <div class="add-all-actions mb-4">
-            <button class="button add-all-to-cart" data-products="<?php echo esc_attr(json_encode($all_product_ids)); ?>">
+            <button class="button add-all-to-cart" data-products="<?php echo esc_attr(json_encode($room_products)); ?>">
                 <?php esc_html_e('Add All Products to Cart', 'product-recommendations'); ?>
             </button>
         </div>
@@ -128,7 +131,7 @@ foreach ($recommendations as $recommendation) {
             if (!empty($room_data['name'])): ?>
                 <div class="room-section mt-6">
                     <div class="room-header mb-3">
-                        <h3 class="title is-2 is-capitalized mb-0"><?php echo esc_html($room_data['name']); ?></h3>
+                        <h3 class="title is-2 mt-6 is-capitalized"><?php echo esc_html($room_data['name']); ?></h3>
                     </div>
                     <?php 
                     $customer_context['room_product_ids'] = $room_data['product_ids'];

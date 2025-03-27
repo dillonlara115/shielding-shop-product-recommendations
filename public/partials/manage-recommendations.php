@@ -107,14 +107,16 @@ $rooms = $wpdb->get_results($wpdb->prepare(
                         <?php else:
                             foreach ($rooms as $room): ?>
                                 <tr>
-                                    <td><?php echo esc_html($room->name); ?></td>
+                                    <td class="room-name"><?php echo esc_html($room->name); ?></td>
                                     <td>
-                                        <button class="button button-edit-room" data-id="<?php echo esc_attr($room->id); ?>">
-                                            <?php esc_html_e('Edit', 'product-recommendations'); ?>
-                                        </button>
-                                        <button class="button button-remove-room" data-id="<?php echo esc_attr($room->id); ?>">
-                                            <?php esc_html_e('Delete', 'product-recommendations'); ?>
-                                        </button>
+                                        <div class="buttons are-small">
+                                            <button class="button button-edit-room" data-id="<?php echo esc_attr($room->id); ?>">
+                                                <?php esc_html_e('Edit', 'product-recommendations'); ?>
+                                            </button>
+                                            <button class="button button-remove-room" data-id="<?php echo esc_attr($room->id); ?>" title="<?php esc_attr_e('Delete', 'product-recommendations'); ?>">
+                                                <span><?php esc_html_e('Delete', 'product-recommendations'); ?></span>
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             <?php endforeach;
@@ -127,7 +129,72 @@ $rooms = $wpdb->get_results($wpdb->prepare(
     </div>
     
     <div class="add-recommendation card mb-4">
-        <!-- Add recommendation form content here -->
+        <header class="card-header">
+            <p class="card-header-title">
+                <?php esc_html_e('Add New Recommendation', 'product-recommendations'); ?>
+            </p>
+        </header>
+        <div class="card-content">
+            <div class="content">
+                <div class="field">
+                    <label class="label" for="product_search"><?php esc_html_e('Search Products', 'product-recommendations'); ?></label>
+                    <div class="control">
+                        <input type="text" 
+                               class="input" 
+                               name="product_search" 
+                               id="product_search" 
+                               autocomplete="off"
+                               placeholder="<?php esc_attr_e('Start typing to search products...', 'product-recommendations'); ?>" />
+                        <div id="product-search-results" class="product-search-results"></div>
+                    </div>
+                </div>
+                
+                <div id="selected-product-card" class="selected-product-card" style="display: none;">
+                    <div class="selected-product-header">
+                        <h4><?php esc_html_e('Selected Product', 'product-recommendations'); ?></h4>
+                    </div>
+                    <div class="selected-product-content">
+                        <div class="selected-product-image" id="selected-product-image"></div>
+                        <div class="selected-product-details">
+                            <div class="selected-product-name" id="selected-product-name"></div>
+                            <div class="selected-product-price" id="selected-product-price"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="field">
+                        <label class="label" for="recommendation_room"><?php esc_html_e('Room (Optional)', 'product-recommendations'); ?></label>
+                        <div class="control">
+                            <select name="recommendation_room" id="recommendation_room" class="input">
+                                <option value=""><?php esc_html_e('General Recommendations', 'product-recommendations'); ?></option>
+                                <?php foreach ($rooms as $room): ?>
+                                    <option value="<?php echo esc_attr($room->id); ?>"><?php echo esc_html($room->name); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="field">
+                        <label class="label" for="recommendation_notes"><?php esc_html_e('Notes (Optional)', 'product-recommendations'); ?></label>
+                        <div class="control">
+                            <textarea name="recommendation_notes" id="recommendation_notes" class="textarea" placeholder="<?php esc_attr_e('Add notes about why you recommend this product...', 'product-recommendations'); ?>"></textarea>
+                        </div>
+                    </div>
+                    
+                    <div class="field">
+                        <label class="label" for="recommendation_quantity"><?php esc_html_e('Quantity', 'product-recommendations'); ?></label>
+                        <div class="control">
+                            <input type="number" name="recommendation_quantity" id="recommendation_quantity" class="input" min="1" value="1">
+                        </div>
+                    </div>
+                    
+                    <div class="field">
+                        <button id="add-recommendation-btn" class="button is-primary" data-customer-id="<?php echo esc_attr($customer_id); ?>">
+                            <?php esc_html_e('Add Recommendation', 'product-recommendations'); ?>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
     
     <div class="existing-recommendations">

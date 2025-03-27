@@ -174,3 +174,370 @@
     background-color: #faf5ff;
     border-left: 3px solid #9c27b0;
 }
+
+/* Variable product styles */
+.variable-product {
+    border-left: 3px solid #3273dc;
+    background-color: #f5f9ff;
+}
+
+/* Variant selection modal */
+.modal {
+    display: none;
+}
+
+.modal.is-active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1000;
+    background-color: rgba(0, 0, 0, 0.7);
+}
+
+.modal-background {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.modal-card {
+    position: relative;
+    width: 90%;
+    max-width: 600px;
+    max-height: 80vh;
+    background-color: white;
+    border-radius: 6px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background-color: #f5f5f5;
+    border-bottom: 1px solid #dbdbdb;
+}
+
+.modal-card-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.modal-card-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex-grow: 1;
+}
+
+.modal-card-foot {
+    display: flex;
+    justify-content: flex-end;
+    padding: 15px 20px;
+    background-color: #f5f5f5;
+    border-top: 1px solid #dbdbdb;
+}
+
+.variant-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.variant-item {
+    display: flex;
+    padding: 10px;
+    border: 1px solid #f0f0f0;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.variant-item:hover {
+    background-color: #f9f9f9;
+}
+
+.variant-image {
+    width: 60px;
+    height: 60px;
+    margin-right: 15px;
+}
+
+.variant-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 3px;
+}
+
+.variant-info {
+    flex-grow: 1;
+}
+
+.variant-name {
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.variant-price {
+    color: #666;
+    font-size: 0.9em;
+    margin-bottom: 5px;
+}
+
+.variant-attributes {
+    font-size: 0.8em;
+    color: #777;
+}
+
+.variant-separator {
+    margin: 15px 0;
+    border: 0;
+    height: 1px;
+    background-color: #e0e0e0;
+}
+
+.delete {
+    background-color: rgba(10, 10, 10, 0.2);
+    border: none;
+    border-radius: 290486px;
+    cursor: pointer;
+    display: inline-block;
+    flex-grow: 0;
+    flex-shrink: 0;
+    font-size: 0;
+    height: 20px;
+    max-height: 20px;
+    max-width: 20px;
+    min-height: 20px;
+    min-width: 20px;
+    outline: none;
+    position: relative;
+    vertical-align: top;
+    width: 20px;
+}
+
+.delete::before, .delete::after {
+    background-color: white;
+    content: "";
+    display: block;
+    left: 50%;
+    position: absolute;
+    top: 50%;
+    transform: translateX(-50%) translateY(-50%) rotate(45deg);
+    transform-origin: center center;
+}
+
+.delete::before {
+    height: 2px;
+    width: 50%;
+}
+
+.delete::after {
+    height: 50%;
+    width: 2px;
+}
+
+.delete:hover, .delete:focus {
+    background-color: rgba(10, 10, 10, 0.3);
+}
+
+/* Product search results styling */
+.product-search-results {
+    display: none;
+    position: absolute;
+    background: white;
+    border: 1px solid #ddd;
+    border-top: none;
+    max-height: 400px;
+    overflow-y: auto;
+    width: 100%;
+    z-index: 1000;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    border-radius: 0 0 4px 4px;
+}
+
+.product-result {
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background-color 0.2s;
+}
+
+.product-result:last-child {
+    border-bottom: none;
+}
+
+.product-result:hover {
+    background-color: #f9f9f9;
+}
+
+.product-result-image {
+    width: 50px;
+    height: 50px;
+    min-width: 50px;
+    margin-right: 15px;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    border-radius: 4px;
+    border: 1px solid #eee;
+}
+
+.product-result-info {
+    flex-grow: 1;
+}
+
+.product-result-name {
+    font-weight: 600;
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.product-result-price {
+    color: #666;
+    font-size: 0.85em;
+}
+
+/* Selected product card styling */
+.selected-product-card {
+    margin-top: 20px;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: #f9f9f9;
+}
+
+.selected-product-header {
+    margin-bottom: 15px;
+}
+
+.selected-product-header h4 {
+    margin: 0;
+    font-size: 1.1em;
+    color: #333;
+}
+
+.selected-product-content {
+    display: flex;
+    margin-bottom: 20px;
+}
+
+.selected-product-image {
+    width: 80px;
+    margin-right: 15px;
+}
+
+.selected-product-image img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+}
+
+.selected-product-details {
+    flex-grow: 1;
+}
+
+.selected-product-name {
+    font-weight: 600;
+    margin-bottom: 5px;
+    font-size: 1.1em;
+}
+
+.selected-product-price {
+    color: #666;
+}
+
+/* Trash button styling */
+.button-remove-recommendation {
+    background-color: #e7610d !important;
+    color: white !important;
+    border: none !important;
+    padding: 0.5em !important;
+    height: 2.5em !important;
+    width: 2.5em !important;
+    border-radius: 4px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: background-color 0.2s !important;
+}
+
+.button-remove-recommendation:hover {
+    background-color: #d25600 !important;
+}
+
+.button-remove-recommendation:before {
+    content: "\f2ed"; /* Font Awesome trash icon */
+    font-family: "Font Awesome 5 Free";
+    font-weight: 900;
+    font-size: 1em;
+}
+
+/* Hide text inside button */
+.button-remove-recommendation span {
+    display: none;
+}
+
+/* Room delete button styling - similar to remove recommendation button */
+.button-remove-room {
+    background-color: #e7610d !important;
+    color: white !important;
+    border: none !important;
+    padding: 0.5em !important;
+    height: 2.5em !important;
+    width: 2.5em !important;
+    border-radius: 4px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: background-color 0.2s !important;
+}
+
+.button-remove-room:hover {
+    background-color: #d25600 !important;
+}
+
+.button-remove-room:before {
+    content: "\f2ed"; /* Font Awesome trash icon */
+    font-family: "Font Awesome 5 Free";
+    font-weight: 900;
+    font-size: 1em;
+}
+
+/* Hide text inside button */
+.button-remove-room span {
+    display: none;
+}
+
+/* Room name capitalization */
+.room-name,
+h3.title.is-capitalized,
+.room-header,
+option[value^="room-"] {
+    text-transform: capitalize !important;
+}
+
+/* For select dropdowns */
+select#recommendation_room option {
+    text-transform: capitalize;
+}
+
+/* For room tables */
+.rooms table td:first-child {
+    text-transform: capitalize;
+}

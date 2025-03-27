@@ -40,9 +40,10 @@
                     response.data.forEach(function(product) {
                         // Add member exclusive label if product is private
                         const privateLabel = product.is_private ? '<span class="private-product-label">Member Exclusive</span>' : '';
+                        const variableClass = product.is_variable ? 'variable-product' : '';
                         
                         resultsContainer.append(`
-                            <div class="product-result" data-product='${JSON.stringify(product)}'>
+                            <div class="product-result ${variableClass}" data-product='${JSON.stringify(product)}'>
                                 <div class="product-result-image" style="background-image: url('${product.image}');"></div>
                                 <div class="product-result-info">
                                     <div class="product-result-name">${product.name} ${privateLabel}</div>
@@ -67,6 +68,130 @@
 
     // Handle product selection
     resultsContainer.on('click', '.product-result', function() {
+        const product = $(this).data('product');
+        
+        if (product.is_variable) {
+            // For variable products, show variant selection modal
+            showVariantSelectionModal(product);
+        } else {
+            // For simple products, proceed as before
+            selectedProductData = product;
+            
+            // Update card content
+            $('#selected-product-name').text(selectedProductData.name);
+            $('#selected-product-price').html(selectedProductData.price_html);
+            $('#selected-product-image').html(`<img src="${selectedProductData.image}" alt="${selectedProductData.name}">`);
+            
+            // Show the card
+            selectedProductCard.show();
+        }
+        
+        // Clear and hide search
+        resultsContainer.hide();
+        searchInput.val('');
+    });
+
+    // Function to show variant selection modal
+    function showVariantSelectionModal(product) {
+        // Create modal if it doesn't exist
+        if ($('#variant-selection-modal').length === 0) {
+            $('body').append(`
+                <div id="variant-selection-modal" class="modal">
+                    <div class="modal-background"></div>
+                    <div class="modal-card">
+                        <header class="modal-card-head">
+                            <p class="modal-card-title">Select Product Variant</p>
+                            <button class="delete close-modal" aria-label="close"></button>
+                        </header>
+                        <div class="modal-card-body">
+                            <div class="variant-list"></div>
+                        </div>
+                        <footer class="modal-card-foot">
+                            <button class="button close-modal">Cancel</button>
+                        </footer>
+                    </div>
+                </div>
+            `);
+            
+            // Close modal when clicking close button or background
+            $(document).on('click', '.close-modal, .modal-background', function() {
+                $('#variant-selection-modal').removeClass('is-active');
+            });
+            
+            // Close modal when pressing ESC key
+            $(document).on('keydown', function(e) {
+                if (e.keyCode === 27 && $('#variant-selection-modal').hasClass('is-active')) {
+                    $('#variant-selection-modal').removeClass('is-active');
+                }
+            });
+        }
+        
+        // Load variants for this product
+        $.ajax({
+            url: pr_product_object.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'get_product_variants',
+                nonce: pr_product_object.nonce,
+                product_id: product.id
+            },
+            success: function(response) {
+                if (response.success && response.data.length > 0) {
+                    const variantList = $('#variant-selection-modal .variant-list');
+                    variantList.empty();
+                    
+                    // Add parent product as an option
+                    variantList.append(`
+                        <div class="variant-item" data-product='${JSON.stringify(product)}'>
+                            <div class="variant-image">
+                                <img src="${product.image}" alt="${product.name}">
+                            </div>
+                            <div class="variant-info">
+                                <div class="variant-name">${product.name} (Any Variant)</div>
+                                <div class="variant-price">${product.price_html}</div>
+                            </div>
+                        </div>
+                    `);
+                    
+                    // Add separator
+                    variantList.append('<hr class="variant-separator">');
+                    
+                    // Add individual variants
+                    response.data.forEach(function(variant) {
+                        variantList.append(`
+                            <div class="variant-item" data-product='${JSON.stringify(variant)}'>
+                                <div class="variant-image">
+                                    <img src="${variant.image}" alt="${variant.name}">
+                                </div>
+                                <div class="variant-info">
+                                    <div class="variant-name">${variant.name}</div>
+                                    <div class="variant-price">${variant.price_html}</div>
+                                    <div class="variant-attributes">${variant.attribute_summary}</div>
+                                </div>
+                            </div>
+                        `);
+                    });
+                    
+                    // Show modal
+                    $('#variant-selection-modal').addClass('is-active');
+                } else {
+                    // If no variants found, just use the parent product
+                    selectedProductData = product;
+                    
+                    // Update card content
+                    $('#selected-product-name').text(selectedProductData.name);
+                    $('#selected-product-price').html(selectedProductData.price_html);
+                    $('#selected-product-image').html(`<img src="${selectedProductData.image}" alt="${selectedProductData.name}">`);
+                    
+                    // Show the card
+                    selectedProductCard.show();
+                }
+            }
+        });
+    }
+
+    // Handle variant selection
+    $(document).on('click', '.variant-item', function() {
         selectedProductData = $(this).data('product');
         
         // Update card content
@@ -77,9 +202,8 @@
         // Show the card
         selectedProductCard.show();
         
-        // Clear and hide search
-        resultsContainer.hide();
-        searchInput.val('');
+        // Close modal
+        $('#variant-selection-modal').removeClass('is-active');
     });
 
     // Handle add recommendation button click
@@ -90,6 +214,7 @@
         const customerId = $(this).data('customer-id');
         const notes = $('#recommendation_notes').val();
         const roomId = $('#recommendation_room').val();
+        const quantity = parseInt($('#recommendation_quantity').val(), 10) || 1;
 
         // Show loading state
         $(this).addClass('is-loading').prop('disabled', true);
@@ -104,7 +229,8 @@
                 customer_id: customerId,
                 product_id: selectedProductData.id,
                 notes: notes,
-                room_id: roomId
+                room_id: roomId,
+                quantity: quantity
             },
             success: function(response) {
                 if (response.success) {
@@ -114,110 +240,27 @@
                         .delay(3000)
                         .fadeOut();
                     
-                    // Create the new recommendation row
-                    const newRow = `
-                        <tr data-id="${response.data.recommendation.id}">
-                            <td class="product-thumbnail">
-                                <img src="${response.data.recommendation.product_image}" alt="${response.data.recommendation.product_name}" />
-                            </td>
-                            <td>${response.data.recommendation.product_name}</td>
-                            <td>${response.data.recommendation.date_created}</td>
-                            <td>
-                                <span class="status-badge status-${response.data.recommendation.status}">
-                                    ${response.data.recommendation.status}
-                                </span>
-                            </td>
-                            <td>${response.data.recommendation.notes}</td>
-                            <td>
-                                <button class="button button-remove-recommendation" data-id="${response.data.recommendation.id}">
-                                    ${pr_product_object.texts.remove}
-                                </button>
-                            </td>
-                        </tr>
-                    `;
-                    
-                    // Find the correct section to add the recommendation
-                    const roomId = $('#recommendation_room').val();
-                    if (roomId) {
-                        // Add to specific room section
-                        const roomName = response.data.recommendation.room_name;
-                        console.log('Room Name:', roomName); // Debug log
-                        
-                        // Look for exact room name match
-                        let roomSection = $('.existing-recommendations h3').filter(function() {
-                            return $(this).text().trim() === roomName;
-                        });
-                        
-                        if (roomSection.length) {
-                            console.log('Found existing room section'); // Debug log
-                            // Room section exists, add to its table
-                            const $tbody = roomSection.next('table').find('tbody');
-                            // Remove "no items" row if it exists
-                            $tbody.find('.woocommerce-no-items').closest('tr').remove();
-                            $tbody.prepend(newRow);
-                        } else {
-                            console.log('Creating new room section'); // Debug log
-                            // Create new room section if it doesn't exist
-                            $('.existing-recommendations').append(`
-                                <h3 class="title is-2 mt-6">${roomName}</h3>
-                                <table class="woocommerce-table shop_table recommendations-table">
-                                    <thead>
-                                        <tr>
-                                            <th>${pr_product_object.texts.image}</th>
-                                            <th>${pr_product_object.texts.product}</th>
-                                            <th>${pr_product_object.texts.date_added}</th>
-                                            <th>${pr_product_object.texts.status}</th>
-                                            <th>${pr_product_object.texts.notes}</th>
-                                            <th>${pr_product_object.texts.actions}</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        ${newRow}
-                                    </tbody>
-                                </table>
-                            `);
-                        }
-                    } else {
-                        // Add to core recommendations
-                        let generalSection = $('.existing-recommendations h3:contains("Core Recommendations")');
-                        if (generalSection.length) {
-                            const $tbody = generalSection.next('table').find('tbody');
-                            // Remove "no items" row if it exists
-                            $tbody.find('.woocommerce-no-items').closest('tr').remove();
-                            $tbody.prepend(newRow);
-                        } else {
-                            // Create core recommendations section if it doesn't exist
-                            $('.existing-recommendations').prepend(`
-                                <h3 class="title is-2">Core Recommendations</h3>
-                                <table class="woocommerce-table shop_table recommendations-table">
-                                    <thead>
-                                        <tr>
-                                            <th>${pr_product_object.texts.image}</th>
-                                            <th>${pr_product_object.texts.product}</th>
-                                            <th>${pr_product_object.texts.date_added}</th>
-                                            <th>${pr_product_object.texts.status}</th>
-                                            <th>${pr_product_object.texts.notes}</th>
-                                            <th>${pr_product_object.texts.actions}</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        ${newRow}
-                                    </tbody>
-                                </table>
-                            `);
-                        }
-                    }
-                    
-                    // Clear the form
-                    $('#selected-product-card').hide();
-                    $('#product_search').val('');
+                    // Reset form
                     $('#recommendation_notes').val('');
+                    $('#recommendation_quantity').val('1');
+                    selectedProductCard.hide();
                     selectedProductData = null;
+                    
+                    // Reload page to show new recommendation
+                    setTimeout(function() {
+                        window.location.reload();
+                    }, 1000);
                 } else {
-                    // Show error
-                    $('<div class="woocommerce-error">' + response.data + '</div>')
+                    // Show error message with more details if available
+                    const errorMsg = response.data || 'An error occurred while adding the recommendation';
+                    $('<div class="woocommerce-error">' + errorMsg + '</div>')
                         .insertBefore('.add-recommendation');
                 }
+            },
+            error: function(xhr, status, error) {
+                // Handle AJAX errors
+                $('<div class="woocommerce-error">Server error: ' + error + '</div>')
+                    .insertBefore('.add-recommendation');
             },
             complete: function() {
                 // Reset button state
