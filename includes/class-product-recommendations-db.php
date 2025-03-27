@@ -77,5 +77,27 @@ class Product_Recommendations_DB {
         if (empty($column_exists)) {
             $wpdb->query("ALTER TABLE {$table_name} ADD COLUMN quantity int(11) DEFAULT 1 NOT NULL AFTER room_id");
         }
+        
+        // Create email log table if it doesn't exist
+        $table_name_email_log = $wpdb->prefix . 'pr_email_log';
+        $table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$table_name_email_log}'");
+        
+        if (!$table_exists) {
+            $charset_collate = $wpdb->get_charset_collate();
+            
+            $sql = "CREATE TABLE {$table_name_email_log} (
+                id bigint(20) NOT NULL AUTO_INCREMENT,
+                customer_id bigint(20) NOT NULL,
+                team_member_id bigint(20) NOT NULL,
+                date_sent datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                subject varchar(255) NOT NULL,
+                PRIMARY KEY  (id),
+                KEY customer_id (customer_id),
+                KEY team_member_id (team_member_id)
+            ) {$charset_collate};";
+            
+            require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+            dbDelta($sql);
+        }
     }
 } 

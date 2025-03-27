@@ -526,4 +526,102 @@
         });
     }
 
+    // Handle send recommendations email button
+    $('#send-recommendations-email').on('click', function() {
+        $('#email-modal').addClass('is-active');
+    });
+
+    // Close email modal
+    $(document).on('click', '.close-modal', function() {
+        $('#email-modal').removeClass('is-active');
+    });
+
+    // Send email
+    $('#send-email-btn').on('click', function() {
+        const customerId = $(this).data('customer-id');
+        const subject = $('#email-subject').val();
+        const message = $('#email-message').val();
+        const includeRecommendations = $('#include-recommendations').is(':checked');
+        
+        // Show loading state
+        $(this).addClass('is-loading').prop('disabled', true);
+        
+        // AJAX call to send email
+        $.ajax({
+            url: pr_product_object.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'send_recommendations_email',
+                nonce: pr_product_object.nonce,
+                customer_id: customerId,
+                subject: subject,
+                message: message,
+                include_recommendations: includeRecommendations ? 'true' : 'false'
+            },
+            success: function(response) {
+                if (response.success) {
+                    // Show success message
+                    $('<div class="woocommerce-message">' + response.data.message + '</div>')
+                        .insertBefore('.email-recommendations')
+                        .delay(5000)
+                        .fadeOut();
+                    
+                    // Close modal
+                    $('#email-modal').removeClass('is-active');
+                } else {
+                    // Show error message
+                    $('<div class="woocommerce-error">' + response.data + '</div>')
+                        .insertBefore('.email-recommendations');
+                }
+            },
+            error: function(xhr, status, error) {
+                // Handle AJAX errors
+                $('<div class="woocommerce-error">Server error: ' + error + '</div>')
+                    .insertBefore('.email-recommendations');
+            },
+            complete: function() {
+                // Reset button state
+                $('#send-email-btn').removeClass('is-loading').prop('disabled', false);
+            }
+        });
+    });
+
+    // Test email system
+    $('#test-email-btn').on('click', function() {
+        // Show loading state
+        $(this).addClass('is-loading').prop('disabled', true);
+        
+        // AJAX call to test email
+        $.ajax({
+            url: pr_product_object.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'test_email',
+                nonce: pr_product_object.nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    // Show success message
+                    $('<div class="notification is-success">' + response.data + '</div>')
+                        .insertBefore('#email-modal .modal-card-foot')
+                        .delay(5000)
+                        .fadeOut();
+                } else {
+                    // Show error message
+                    $('<div class="notification is-danger">' + response.data + '</div>')
+                        .insertBefore('#email-modal .modal-card-foot');
+                }
+            },
+            error: function(xhr, status, error) {
+                // Handle AJAX errors
+                $('<div class="notification is-danger">Server error: ' + error + '</div>')
+                    .insertBefore('#email-modal .modal-card-foot');
+            },
+            complete: function() {
+                // Reset button state
+                $('#test-email-btn').removeClass('is-loading').prop('disabled', false);
+            }
+        });
+    });
+
 })(jQuery); 

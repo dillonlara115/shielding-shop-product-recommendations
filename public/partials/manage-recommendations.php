@@ -84,6 +84,25 @@ $rooms = $wpdb->get_results($wpdb->prepare(
         </div>
     </div>
     
+    <div class="email-recommendations card mb-4">
+        <header class="card-header">
+            <p class="card-header-title">
+                <?php esc_html_e('Email Recommendations', 'product-recommendations'); ?>
+            </p>
+        </header>
+        <div class="card-content">
+            <div class="content">
+                <p><?php esc_html_e('Send an email to this customer with their current recommendations.', 'product-recommendations'); ?></p>
+                <button id="send-recommendations-email" class="button is-primary" data-customer-id="<?php echo esc_attr($customer_id); ?>">
+                    <span class="icon">
+                        <i class="fas fa-envelope"></i>
+                    </span>
+                    <span><?php esc_html_e('Send Email', 'product-recommendations'); ?></span>
+                </button>
+            </div>
+        </div>
+    </div>
+    
     <div class="rooms card mb-4">
         <header class="card-header">
             <p class="card-header-title">
@@ -241,5 +260,52 @@ $rooms = $wpdb->get_results($wpdb->prepare(
                 <?php display_recommendations_table($room_data['recommendations'], $team_member_context); ?>
             <?php endif;
         endforeach; ?>
+    </div>
+</div>
+
+<div id="email-modal" class="modal">
+    <div class="modal-background"></div>
+    <div class="modal-card">
+        <header class="modal-card-head">
+            <p class="modal-card-title"><?php esc_html_e('Send Recommendations Email', 'product-recommendations'); ?></p>
+            <button class="delete close-modal" aria-label="close"></button>
+        </header>
+        <div class="modal-card-body">
+            <div class="field">
+                <label class="label" for="email-subject"><?php esc_html_e('Email Subject', 'product-recommendations'); ?></label>
+                <div class="control">
+                    <input type="text" id="email-subject" class="input" value="<?php echo esc_attr(sprintf(__('Your Product Recommendations from %s', 'product-recommendations'), get_bloginfo('name'))); ?>">
+                </div>
+            </div>
+            
+            <div class="field">
+                <label class="label" for="email-message"><?php esc_html_e('Personal Message', 'product-recommendations'); ?></label>
+                <div class="control">
+                    <textarea id="email-message" class="textarea" rows="5" placeholder="<?php esc_attr_e('Add a personal message to include in the email...', 'product-recommendations'); ?>"></textarea>
+                </div>
+            </div>
+            
+            <div class="field">
+                <label class="checkbox">
+                    <input type="checkbox" id="include-recommendations" checked>
+                    <?php esc_html_e('Include all recommendations in email', 'product-recommendations'); ?>
+                </label>
+            </div>
+            
+            <div class="notification is-info is-light">
+                <p><?php esc_html_e('The email will be sent to:', 'product-recommendations'); ?> <strong><?php echo esc_html($customer->customer_email); ?></strong></p>
+            </div>
+        </div>
+        <footer class="modal-card-foot">
+            <div class="buttons">
+                <button id="send-email-btn" class="button is-primary" data-customer-id="<?php echo esc_attr($customer_id); ?>">
+                    <?php esc_html_e('Send Email', 'product-recommendations'); ?>
+                </button>
+                <button id="test-email-btn" class="button is-info">
+                    <?php esc_html_e('Test Email System', 'product-recommendations'); ?>
+                </button>
+                <button class="button close-modal"><?php esc_html_e('Cancel', 'product-recommendations'); ?></button>
+            </div>
+        </footer>
     </div>
 </div> 

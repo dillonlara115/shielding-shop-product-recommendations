@@ -1046,7 +1046,7 @@ class Product_Recommendations_Public {
 	}
 
 	/**
-	 * Register new AJAX handlers
+	 * Register the AJAX handlers
 	 */
 	public function register_ajax_handlers() {
 		// Existing handlers
@@ -1061,8 +1061,293 @@ class Product_Recommendations_Public {
 		add_action('wp_ajax_get_customer_rooms', array($this, 'get_customer_rooms_ajax'));
 		add_action('wp_ajax_add_to_cart_custom', array($this, 'add_to_cart_custom_ajax'));
 		add_action('wp_ajax_nopriv_add_to_cart_custom', array($this, 'add_to_cart_custom_ajax'));
-		
-		// New handler for product variants
 		add_action('wp_ajax_get_product_variants', array($this, 'get_product_variants_ajax'));
+		
+		// Email handlers
+		add_action('wp_ajax_send_recommendations_email', array($this, 'send_recommendations_email_ajax'));
+		add_action('wp_ajax_test_email', array($this, 'test_email_ajax'));
+	}
+
+	/**
+	 * AJAX handler for sending recommendations email
+	 */
+	public function send_recommendations_email_ajax() {
+		check_ajax_referer('product_search_nonce', 'nonce');
+		
+		$customer_id = isset($_POST['customer_id']) ? intval($_POST['customer_id']) : 0;
+		$subject = isset($_POST['subject']) ? sanitize_text_field($_POST['subject']) : '';
+		$message = isset($_POST['message']) ? wp_kses_post($_POST['message']) : '';
+		$include_recommendations = isset($_POST['include_recommendations']) && $_POST['include_recommendations'] === 'true';
+		
+		if (!$customer_id) {
+			wp_send_json_error('Missing customer ID');
+			return;
+		}
+		
+		// Check if user has permission to send email for this customer
+		global $wpdb;
+		$team_member_id = get_current_user_id();
+		
+		// Get customer details with email
+		$customer = $wpdb->get_row($wpdb->prepare(
+			"SELECT c.*, u.user_email, u.display_name 
+			 FROM {$wpdb->prefix}pr_customers c
+			 JOIN {$wpdb->users} u ON c.user_id = u.ID
+			 WHERE c.id = %d AND c.team_member_id = %d",
+			$customer_id,
+			$team_member_id
+		));
+		
+		if (!$customer) {
+			wp_send_json_error('You do not have permission to send emails to this customer');
+			return;
+		}
+		
+		// Debug log
+		error_log('Sending email to customer: ' . print_r($customer, true));
+		
+		// Get team member details
+		$team_member = get_userdata($team_member_id);
+		if (!$team_member) {
+			wp_send_json_error('Team member not found');
+			return;
+		}
+		
+		// Get recommendations
+		$recommendations_html = '';
+		if ($include_recommendations) {
+			$recommendations = $wpdb->get_results($wpdb->prepare(
+				"SELECT r.*, p.post_title as product_name, rm.name as room_name
+				 FROM {$wpdb->prefix}pr_recommendations r
+				 LEFT JOIN {$wpdb->posts} p ON r.product_id = p.ID
+				 LEFT JOIN {$wpdb->prefix}pr_rooms rm ON r.room_id = rm.id
+				 WHERE r.customer_id = %d AND r.team_member_id = %d
+				 ORDER BY COALESCE(r.room_id, 0), r.date_created DESC",
+				$customer_id,
+				$team_member_id
+			));
+			
+			// Group recommendations by room
+			$recommendations_by_room = array();
+			$general_recommendations = array();
+			
+			foreach ($recommendations as $recommendation) {
+				$product = wc_get_product($recommendation->product_id);
+				if (!$product) continue;
+				
+				$recommendation->product_price = $product->get_price_html();
+				$recommendation->product_image = wp_get_attachment_image_url($product->get_image_id(), 'thumbnail');
+				$recommendation->product_url = get_permalink($recommendation->product_id);
+				
+				if (!empty($recommendation->room_id)) {
+					if (!isset($recommendations_by_room[$recommendation->room_id])) {
+						$recommendations_by_room[$recommendation->room_id] = array(
+							'name' => $recommendation->room_name,
+							'recommendations' => array()
+						);
+					}
+					$recommendations_by_room[$recommendation->room_id]['recommendations'][] = $recommendation;
+				} else {
+					$general_recommendations[] = $recommendation;
+				}
+			}
+			
+			// Build HTML for recommendations
+			ob_start();
+			
+			// Display general recommendations
+			if (!empty($general_recommendations)) {
+				?>
+				<h3 style="margin-top: 30px; color: #333; border-bottom: 1px solid #ddd; padding-bottom: 10px;">Core Recommendations</h3>
+				<table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
+					<thead>
+						<tr>
+							<th style="text-align: left; padding: 10px; border-bottom: 1px solid #ddd;">Product</th>
+							<th style="text-align: left; padding: 10px; border-bottom: 1px solid #ddd;">Price</th>
+							<th style="text-align: left; padding: 10px; border-bottom: 1px solid #ddd;">Notes</th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ($general_recommendations as $recommendation): ?>
+							<tr>
+								<td style="padding: 10px; border-bottom: 1px solid #eee;">
+									<div style="display: flex; align-items: center;">
+										<?php if ($recommendation->product_image): ?>
+											<img src="<?php echo esc_url($recommendation->product_image); ?>" alt="<?php echo esc_attr($recommendation->product_name); ?>" style="width: 50px; height: auto; margin-right: 10px;">
+										<?php endif; ?>
+										<div>
+											<a href="<?php echo esc_url($recommendation->product_url); ?>" style="color: #0073aa; text-decoration: none; font-weight: bold;">
+												<?php echo esc_html($recommendation->product_name); ?>
+											</a>
+											<?php if ($recommendation->quantity > 1): ?>
+												<div style="font-size: 0.9em; color: #666;">
+													<?php echo sprintf(_n('Quantity: %d item', 'Quantity: %d items', $recommendation->quantity, 'product-recommendations'), $recommendation->quantity); ?>
+												</div>
+											<?php endif; ?>
+										</div>
+									</div>
+								</td>
+								<td style="padding: 10px; border-bottom: 1px solid #eee;"><?php echo $recommendation->product_price; ?></td>
+								<td style="padding: 10px; border-bottom: 1px solid #eee;"><?php echo esc_html($recommendation->notes); ?></td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+				<?php
+			}
+			
+			// Display room-specific recommendations
+			foreach ($recommendations_by_room as $room_id => $room_data) {
+				if (empty($room_data['recommendations'])) continue;
+				?>
+				<h3 style="margin-top: 30px; color: #333; border-bottom: 1px solid #ddd; padding-bottom: 10px; text-transform: capitalize;"><?php echo esc_html($room_data['name']); ?></h3>
+				<table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
+					<thead>
+						<tr>
+							<th style="text-align: left; padding: 10px; border-bottom: 1px solid #ddd;">Product</th>
+							<th style="text-align: left; padding: 10px; border-bottom: 1px solid #ddd;">Price</th>
+							<th style="text-align: left; padding: 10px; border-bottom: 1px solid #ddd;">Notes</th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ($room_data['recommendations'] as $recommendation): ?>
+							<tr>
+								<td style="padding: 10px; border-bottom: 1px solid #eee;">
+									<div style="display: flex; align-items: center;">
+										<?php if ($recommendation->product_image): ?>
+											<img src="<?php echo esc_url($recommendation->product_image); ?>" alt="<?php echo esc_attr($recommendation->product_name); ?>" style="width: 50px; height: auto; margin-right: 10px;">
+										<?php endif; ?>
+										<div>
+											<a href="<?php echo esc_url($recommendation->product_url); ?>" style="color: #0073aa; text-decoration: none; font-weight: bold;">
+												<?php echo esc_html($recommendation->product_name); ?>
+											</a>
+											<?php if ($recommendation->quantity > 1): ?>
+												<div style="font-size: 0.9em; color: #666;">
+													<?php echo sprintf(_n('Quantity: %d item', 'Quantity: %d items', $recommendation->quantity, 'product-recommendations'), $recommendation->quantity); ?>
+												</div>
+											<?php endif; ?>
+										</div>
+									</div>
+								</td>
+								<td style="padding: 10px; border-bottom: 1px solid #eee;"><?php echo $recommendation->product_price; ?></td>
+								<td style="padding: 10px; border-bottom: 1px solid #eee;"><?php echo esc_html($recommendation->notes); ?></td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+				<?php
+			}
+			
+			$recommendations_html = ob_get_clean();
+		}
+		
+		// Build email content
+		$site_name = get_bloginfo('name');
+		$site_url = get_site_url();
+		$account_url = wc_get_account_endpoint_url('my-recommendations');
+		
+		$email_content = '
+		<div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; color: #333;">
+			<div style="background-color: #f5f5f5; padding: 20px; text-align: center; border-bottom: 3px solid #e7610d;">
+				<h1 style="margin: 0; color: #333;">' . esc_html($site_name) . ' Recommendations</h1>
+			</div>
+			
+			<div style="padding: 20px; background-color: #fff; border: 1px solid #ddd;">
+				<p>Hello ' . esc_html($customer->display_name) . ',</p>
+				
+				<p>' . nl2br(esc_html($message)) . '</p>
+				
+				' . $recommendations_html . '
+				
+				<div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+					<p>To view all your recommendations, please visit your account:</p>
+					<p style="text-align: center;">
+						<a href="' . esc_url($account_url) . '" style="display: inline-block; padding: 10px 20px; background-color: #e7610d; color: #fff; text-decoration: none; border-radius: 4px;">View My Recommendations</a>
+					</p>
+				</div>
+			</div>
+			
+			<div style="background-color: #f5f5f5; padding: 15px; text-align: center; font-size: 12px; color: #666;">
+				<p>&copy; ' . date('Y') . ' ' . esc_html($site_name) . ' | <a href="' . esc_url($site_url) . '" style="color: #666;">' . esc_url($site_url) . '</a></p>
+			</div>
+		</div>';
+		
+		// Set up email headers
+		$headers = array(
+			'Content-Type: text/html; charset=UTF-8',
+			'From: ' . $site_name . ' <' . get_option('admin_email') . '>',
+			'Reply-To: ' . $team_member->display_name . ' <' . $team_member->user_email . '>'
+		);
+		
+		// Debug log
+		error_log('Sending email with headers: ' . print_r($headers, true));
+		error_log('Email content: ' . $email_content);
+		
+		// Try using WordPress mail function directly
+		$sent = wp_mail($customer->user_email, $subject, $email_content, $headers);
+		
+		// Debug log
+		error_log('Email sent result: ' . ($sent ? 'success' : 'failed'));
+		
+		if ($sent) {
+			// Log the email
+			$wpdb->insert(
+				$wpdb->prefix . 'pr_email_log',
+				array(
+					'customer_id' => $customer_id,
+					'team_member_id' => $team_member_id,
+					'date_sent' => current_time('mysql'),
+					'subject' => $subject
+				),
+				array('%d', '%d', '%s', '%s')
+			);
+			
+			wp_send_json_success(array(
+				'message' => sprintf(__('Email sent successfully to %s', 'product-recommendations'), $customer->user_email)
+			));
+		} else {
+			// Get more detailed error information
+			global $phpmailer;
+			if (isset($phpmailer) && $phpmailer->ErrorInfo) {
+				error_log('PHPMailer error: ' . $phpmailer->ErrorInfo);
+				wp_send_json_error('Failed to send email: ' . $phpmailer->ErrorInfo);
+			} else {
+				// Try an alternative approach - sometimes the global $phpmailer isn't populated
+				$error = error_get_last();
+				if ($error) {
+					error_log('PHP error: ' . print_r($error, true));
+					wp_send_json_error('Failed to send email due to server error. Please check server logs.');
+				} else {
+					wp_send_json_error('Failed to send email. Please try again or check mail server configuration.');
+				}
+			}
+		}
+	}
+
+	/**
+	 * Test email functionality
+	 */
+	public function test_email_ajax() {
+		check_ajax_referer('product_search_nonce', 'nonce');
+		
+		$to = get_option('admin_email');
+		$subject = 'Test Email from Product Recommendations';
+		$message = 'This is a test email to verify that the WordPress mail function is working correctly.';
+		$headers = array('Content-Type: text/html; charset=UTF-8');
+		
+		error_log('Sending test email to: ' . $to);
+		$sent = wp_mail($to, $subject, $message, $headers);
+		error_log('Test email result: ' . ($sent ? 'success' : 'failed'));
+		
+		if ($sent) {
+			wp_send_json_success('Test email sent successfully to ' . $to);
+		} else {
+			global $phpmailer;
+			if (isset($phpmailer) && $phpmailer->ErrorInfo) {
+				wp_send_json_error('Failed to send test email: ' . $phpmailer->ErrorInfo);
+			} else {
+				wp_send_json_error('Failed to send test email. Please check server configuration.');
+			}
+		}
 	}
 }
