@@ -47,7 +47,7 @@ class Product_Recommendations_Public {
 	 * @param      string    $plugin_name       The name of the plugin.
 	 * @param      string    $version    The version of this plugin.
 	 */
-	public function __construct( $plugin_name, $version ) {
+	public function __construct($plugin_name, $version) {
 		$this->plugin_name = $plugin_name;
 		$this->version = $version;
 
@@ -125,26 +125,7 @@ class Product_Recommendations_Public {
 			true // Load in footer
 		);
 		
-		// Enqueue user search script
-		wp_enqueue_script(
-			$this->plugin_name . '-user-search',
-			plugin_dir_url(__FILE__) . 'js/user-search.js',
-			array('jquery'),
-			$this->version,
-			true
-		);
-		
-		// Localize script
-		wp_localize_script(
-			$this->plugin_name . '-user-search',
-			'pr_ajax_object',
-			array(
-				'ajax_url' => admin_url('admin-ajax.php'),
-				'nonce' => wp_create_nonce('user_search_nonce')
-			)
-		);
-		
-		// Enqueue product recommendations script
+		// Load product recommendations script
 		wp_enqueue_script(
 			$this->plugin_name . '-product-recommendations',
 			plugin_dir_url(__FILE__) . 'js/product-recommendations.js',
@@ -169,19 +150,7 @@ class Product_Recommendations_Public {
 			array(
 				'ajax_url' => admin_url('admin-ajax.php'),
 				'nonce' => wp_create_nonce('product_search_nonce'),
-				'texts' => array(
-					'general_recommendations' => __('Core Recommendations', 'product-recommendations'),
-					'current_recommendations' => __('Current Recommendations', 'product-recommendations'),
-					'image' => __('Image', 'product-recommendations'),
-					'product' => __('Product', 'product-recommendations'),
-					'date_added' => __('Date Added', 'product-recommendations'),
-					'status' => __('Status', 'product-recommendations'),
-					'notes' => __('Notes', 'product-recommendations'),
-					'actions' => __('Actions', 'product-recommendations'),
-					'remove' => __('Remove', 'product-recommendations'),
-					'confirm_remove' => __('Are you sure you want to remove this recommendation?', 'product-recommendations'),
-					'no_recommendations' => __('No recommendations found for this customer.', 'product-recommendations')
-				)
+				'product_placeholder' => '/wp-content/uploads/2023/09/product-placeholder.png'
 			)
 		);
 	}
@@ -934,26 +903,63 @@ class Product_Recommendations_Public {
 	}
 
 	/**
-	 * Custom AJAX handler for adding products to cart
+	 * AJAX handler for adding products to cart
 	 */
 	public function add_to_cart_custom_ajax() {
-		check_ajax_referer('wc_store_api', 'nonce');
+		error_log('add_to_cart_custom_ajax called');
 		
-		$product_id = isset($_POST['product_id']) ? absint($_POST['product_id']) : 0;
-		$quantity = isset($_POST['quantity']) ? absint($_POST['quantity']) : 1;
-		
-		if ($product_id > 0) {
-			$added = WC()->cart->add_to_cart($product_id, $quantity);
-			if ($added) {
-				wp_send_json_success();
-			} else {
-				wp_send_json_error();
-			}
-		} else {
-			wp_send_json_error();
+		// Check nonce
+		if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'product_search_nonce')) {
+			error_log('Invalid nonce: ' . (isset($_POST['nonce']) ? $_POST['nonce'] : 'not set'));
+			wp_send_json_error('Invalid security token');
+			return;
 		}
 		
-		wp_die();
+		$product_id = isset($_POST['product_id']) ? intval($_POST['product_id']) : 0;
+		$quantity = isset($_POST['quantity']) ? intval($_POST['quantity']) : 1;
+		
+		error_log("Adding product ID: $product_id, Quantity: $quantity to cart");
+		
+		if (!$product_id) {
+			error_log('No product ID provided');
+			wp_send_json_error('No product ID provided');
+			return;
+		}
+		
+		// Check if product exists and is purchasable
+		$product = wc_get_product($product_id);
+		
+		if (!$product) {
+			error_log("Product not found: $product_id");
+			wp_send_json_error('Product not found');
+			return;
+		}
+		
+		if (!$product->is_purchasable()) {
+			error_log("Product is not purchasable: $product_id");
+			wp_send_json_error('Product is not purchasable');
+			return;
+		}
+		
+		// Add to cart
+		$cart_item_key = WC()->cart->add_to_cart($product_id, $quantity);
+		
+		if ($cart_item_key) {
+			error_log("Product added to cart successfully: $product_id, Quantity: $quantity, Cart item key: $cart_item_key");
+			wp_send_json_success(array(
+				'product_id' => $product_id,
+				'product_name' => $product->get_name(),
+				'quantity' => $quantity,
+				'cart_item_key' => $cart_item_key,
+				'message' => sprintf(__('%s added to cart', 'product-recommendations'), $product->get_name())
+			));
+		} else {
+			error_log("Failed to add product to cart: $product_id");
+			wp_send_json_error(array(
+				'product_id' => $product_id,
+				'message' => sprintf(__('Failed to add %s to cart', 'product-recommendations'), $product->get_name())
+			));
+		}
 	}
 
 	/**
@@ -1028,7 +1034,7 @@ class Product_Recommendations_Public {
 	/**
 	 * Register the AJAX handlers
 	 */
-	public function register_ajax_handlers() {
+	private function register_ajax_handlers() {
 		// Existing handlers
 		add_action('wp_ajax_search_products', array($this, 'search_products_ajax'));
 		add_action('wp_ajax_add_recommendation', array($this, 'add_recommendation_ajax'));

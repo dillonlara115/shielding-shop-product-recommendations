@@ -167,26 +167,19 @@ class Product_Recommendations {
 	 * @access   private
 	 */
 	private function define_public_hooks() {
+		$plugin_public = new Product_Recommendations_Public($this->get_plugin_name(), $this->get_version());
 
-		$plugin_public = new Product_Recommendations_Public( $this->get_plugin_name(), $this->get_version() );
-
-		// Debug
-		error_log('Setting up Product Recommendations hooks');
-
-		// Enqueue styles and scripts
-		add_action('wp_enqueue_scripts', array($plugin_public, 'enqueue_styles'));
-		add_action('wp_enqueue_scripts', array($plugin_public, 'enqueue_scripts'));
+		$this->loader->add_action('wp_enqueue_scripts', $plugin_public, 'enqueue_styles');
+		$this->loader->add_action('wp_enqueue_scripts', $plugin_public, 'enqueue_scripts');
 		
-		// Add endpoint and query vars
-		add_action('init', array($plugin_public, 'init'));
-		add_filter('query_vars', array($plugin_public, 'add_recommendations_query_vars'));
-		add_filter('woocommerce_get_query_vars', array($plugin_public, 'add_recommendations_query_vars'));
+		// Add endpoint for customer recommendations
+		$this->loader->add_action('init', $plugin_public, 'add_customer_recommendations_endpoint');
 		
-		// Add menu item and content
-		add_filter('woocommerce_account_menu_items', array($plugin_public, 'add_recommendations_menu_item'));
-		add_action('woocommerce_account_product-recommendations_endpoint', array($plugin_public, 'recommendations_content'));
-		add_action('woocommerce_account_product-recommendations-customers_endpoint', array($plugin_public, 'customers_content'));
-
+		// Add content to the endpoint
+		$this->loader->add_action('woocommerce_account_product-recommendations_endpoint', $plugin_public, 'recommendations_content');
+		
+		// Add menu item to My Account
+		$this->loader->add_filter('woocommerce_account_menu_items', $plugin_public, 'add_recommendations_menu_item');
 	}
 
 	/**

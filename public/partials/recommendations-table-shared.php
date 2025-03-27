@@ -189,7 +189,9 @@ function display_recommendations_table($recommendations, $context = array()) {
                                         <span><?php esc_html_e('Remove', 'product-recommendations'); ?></span>
                                     </button>
                                 <?php elseif ($context['view'] === 'customer'): ?>
-                                    <button class="button add-to-cart-button" data-product-id="<?php echo esc_attr($recommendation->product_id); ?>">
+                                    <button class="button add-to-cart-button" 
+                                            data-product-id="<?php echo esc_attr($recommendation->product_id); ?>"
+                                            data-quantity="<?php echo esc_attr($recommendation->quantity); ?>">
                                         <?php esc_html_e('Add to Cart', 'product-recommendations'); ?>
                                     </button>
                                 <?php endif; ?>
@@ -216,7 +218,12 @@ function display_recommendations_table($recommendations, $context = array()) {
                             <strong><?php echo wc_price($subtotal); ?></strong>
                         </td>
                         <td class="add-all-cell">
-                            <button class="button add-room-to-cart" data-products="<?php echo esc_attr(json_encode($context['room_product_ids'])); ?>">
+                            <button class="button add-room-to-cart" data-products="<?php echo esc_attr(json_encode(array_map(function($rec) {
+                                return [
+                                    'id' => $rec->product_id,
+                                    'quantity' => $rec->quantity
+                                ];
+                            }, $recommendations))); ?>">
                                 <?php esc_html_e('Add All to Cart', 'product-recommendations'); ?>
                             </button>
                         </td>
