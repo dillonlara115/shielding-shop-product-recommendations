@@ -112,18 +112,19 @@ class Product_Recommendations_Public {
 		// Debug
 		error_log('Enqueuing scripts for Product Recommendations');
 		
-
-
-
+		// Load jQuery UI for drag and drop
+		wp_enqueue_script('jquery-ui-core');
+		wp_enqueue_script('jquery-ui-sortable');
+		
 		// Load plugin-specific scripts
 		wp_enqueue_script(
 			$this->plugin_name,
 			plugin_dir_url(__FILE__) . 'js/product-recommendations-public.js',
-			array(),
+			array('jquery'),
 			$this->version,
 			true // Load in footer
 		);
-
+		
 		// Enqueue user search script
 		wp_enqueue_script(
 			$this->plugin_name . '-user-search',
@@ -132,7 +133,7 @@ class Product_Recommendations_Public {
 			$this->version,
 			true
 		);
-
+		
 		// Localize script
 		wp_localize_script(
 			$this->plugin_name . '-user-search',
@@ -142,12 +143,21 @@ class Product_Recommendations_Public {
 				'nonce' => wp_create_nonce('user_search_nonce')
 			)
 		);
-
+		
 		// Enqueue product recommendations script
 		wp_enqueue_script(
 			$this->plugin_name . '-product-recommendations',
 			plugin_dir_url(__FILE__) . 'js/product-recommendations.js',
 			array('jquery'),
+			$this->version,
+			true
+		);
+		
+		// Enqueue drag and drop script
+		wp_enqueue_script(
+			$this->plugin_name . '-drag-drop',
+			plugin_dir_url(__FILE__) . 'js/drag-drop.js',
+			array('jquery', 'jquery-ui-sortable'),
 			$this->version,
 			true
 		);
@@ -173,36 +183,6 @@ class Product_Recommendations_Public {
 					'no_recommendations' => __('No recommendations found for this customer.', 'product-recommendations')
 				)
 			)
-		);
-
-		// Add to product-recommendations.js
-		wp_add_inline_script(
-			$this->plugin_name . '-product-recommendations',
-			"$('#add-room-btn').on('click', function(e) {
-				e.preventDefault();
-				const roomName = prompt('Enter room name:');
-				if (!roomName) return;
-				
-				$.ajax({
-					url: pr_product_object.ajax_url,
-					type: 'POST',
-					data: {
-						action: 'add_room',
-						nonce: pr_product_object.nonce,
-						room_name: roomName
-					},
-					success: function(response) {
-						if (response.success) {
-							$('#recommendation_room').append(
-								$('<option>', {
-									value: response.data.id,
-									text: response.data.name
-								})
-							);
-						}
-					}
-				});
-			});"
 		);
 	}
 
@@ -1066,6 +1046,9 @@ class Product_Recommendations_Public {
 		// Email handlers
 		add_action('wp_ajax_send_recommendations_email', array($this, 'send_recommendations_email_ajax'));
 		add_action('wp_ajax_test_email', array($this, 'test_email_ajax'));
+		
+		// Drag and drop handler
+		add_action('wp_ajax_update_recommendation_positions', array($this, 'update_recommendation_positions_ajax'));
 	}
 
 	/**
@@ -1347,6 +1330,147 @@ class Product_Recommendations_Public {
 				wp_send_json_error('Failed to send test email: ' . $phpmailer->ErrorInfo);
 			} else {
 				wp_send_json_error('Failed to send test email. Please check server configuration.');
+			}
+		}
+	}
+
+	/**
+	 * AJAX handler for updating recommendation positions
+	 */
+	public function update_recommendation_positions_ajax() {
+		check_ajax_referer('product_search_nonce', 'nonce');
+		
+		$positions = isset($_POST['positions']) ? $_POST['positions'] : array();
+		$room_id = isset($_POST['room_id']) ? intval($_POST['room_id']) : 0;
+		
+		if (empty($positions)) {
+			wp_send_json_error('No positions provided');
+			return;
+		}
+		
+		global $wpdb;
+		$team_member_id = get_current_user_id();
+		
+		// Check if position column exists
+		$position_exists = $wpdb->get_results("SHOW COLUMNS FROM {$wpdb->prefix}pr_recommendations LIKE 'position'");
+		
+		if (empty($position_exists)) {
+			// Add position column if it doesn't exist
+			require_once plugin_dir_path(dirname(__FILE__)) . 'includes/class-product-recommendations-db.php';
+			Product_Recommendations_DB::update_tables();
+			
+			// Check again to make sure it was added
+			$position_exists = $wpdb->get_results("SHOW COLUMNS FROM {$wpdb->prefix}pr_recommendations LIKE 'position'");
+			
+			if (empty($position_exists)) {
+				wp_send_json_error('Could not add position column to database');
+				return;
+			}
+		}
+		
+		$success = true;
+		$errors = array();
+		
+		// Start transaction
+		$wpdb->query('START TRANSACTION');
+		
+		foreach ($positions as $position_data) {
+			$recommendation_id = isset($position_data['id']) ? intval($position_data['id']) : 0;
+			$position = isset($position_data['position']) ? intval($position_data['position']) : 0;
+			
+			if (!$recommendation_id) continue;
+			
+			// Verify the recommendation belongs to this team member
+			$recommendation = $wpdb->get_row($wpdb->prepare(
+				"SELECT * FROM {$wpdb->prefix}pr_recommendations 
+				 WHERE id = %d AND team_member_id = %d",
+				$recommendation_id,
+				$team_member_id
+			));
+			
+			if (!$recommendation) {
+				$errors[] = "Recommendation #$recommendation_id not found or not owned by you";
+				$success = false;
+				continue;
+			}
+			
+			// Update the position
+			$updated = $wpdb->update(
+				$wpdb->prefix . 'pr_recommendations',
+				array('position' => $position),
+				array('id' => $recommendation_id),
+				array('%d'),
+				array('%d')
+			);
+			
+			if ($updated === false) {
+				$errors[] = "Failed to update position for recommendation #$recommendation_id";
+				$success = false;
+			}
+		}
+		
+		if ($success) {
+			$wpdb->query('COMMIT');
+			wp_send_json_success('Positions updated successfully');
+		} else {
+			$wpdb->query('ROLLBACK');
+			wp_send_json_error(array(
+				'message' => 'Failed to update some positions',
+				'errors' => $errors
+			));
+		}
+	}
+
+	/**
+	 * Debug database structure
+	 */
+	public function debug_database_structure() {
+		global $wpdb;
+		
+		// Check recommendations table structure
+		$table_name = $wpdb->prefix . 'pr_recommendations';
+		$columns = $wpdb->get_results("DESCRIBE {$table_name}");
+		
+		error_log('Recommendations table structure:');
+		foreach ($columns as $column) {
+			error_log("  {$column->Field}: {$column->Type} {$column->Null} {$column->Default}");
+		}
+		
+		// Check a few sample recommendations with room_id
+		$sample_recommendations = $wpdb->get_results("SELECT id, customer_id, team_member_id, room_id, product_id FROM {$table_name} WHERE room_id IS NOT NULL LIMIT 5");
+		
+		error_log('Sample recommendations with room_id:');
+		if (empty($sample_recommendations)) {
+			error_log('  No recommendations found with room_id');
+		} else {
+			foreach ($sample_recommendations as $rec) {
+				error_log("  ID: {$rec->id}, Customer: {$rec->customer_id}, Team Member: {$rec->team_member_id}, Room: " . var_export($rec->room_id, true) . ", Product: {$rec->product_id}");
+			}
+		}
+		
+		// Check rooms table
+		$rooms_table = $wpdb->prefix . 'pr_rooms';
+		$rooms = $wpdb->get_results("SELECT * FROM {$rooms_table} LIMIT 5");
+		
+		error_log('Sample rooms:');
+		foreach ($rooms as $room) {
+			error_log("  ID: {$room->id}, Customer: {$room->customer_id}, Name: {$room->name}");
+		}
+		
+		// Check if any recommendations are associated with rooms
+		$room_recommendations = $wpdb->get_results("
+			SELECT r.id, r.customer_id, r.room_id, rm.name as room_name
+			FROM {$table_name} r
+			JOIN {$rooms_table} rm ON r.room_id = rm.id
+			LIMIT 5
+		");
+		
+		error_log('Recommendations with room associations:');
+		if (empty($room_recommendations)) {
+			error_log('  No recommendations found with room associations');
+		} else {
+			foreach ($room_recommendations as $rec) {
+				error_log("  ID: {$rec->id}, Customer: {$rec->customer_id}, Room: {$rec->room_id}, Room Name: {$rec->room_name}");
 			}
 		}
 	}

@@ -78,6 +78,17 @@ class Product_Recommendations_DB {
             $wpdb->query("ALTER TABLE {$table_name} ADD COLUMN quantity int(11) DEFAULT 1 NOT NULL AFTER room_id");
         }
         
+        // Check if position column exists in recommendations table
+        $position_exists = $wpdb->get_results("SHOW COLUMNS FROM {$table_name} LIKE 'position'");
+        
+        // Add position column if it doesn't exist
+        if (empty($position_exists)) {
+            $wpdb->query("ALTER TABLE {$table_name} ADD COLUMN position int(11) DEFAULT 0 NOT NULL AFTER quantity");
+            error_log('Added position column to recommendations table');
+        } else {
+            error_log('Position column already exists in recommendations table');
+        }
+        
         // Create email log table if it doesn't exist
         $table_name_email_log = $wpdb->prefix . 'pr_email_log';
         $table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$table_name_email_log}'");
@@ -99,5 +110,55 @@ class Product_Recommendations_DB {
             require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
             dbDelta($sql);
         }
+    }
+
+    /**
+     * Initialize position values for existing recommendations
+     */
+    public static function initialize_positions() {
+        global $wpdb;
+        
+        $table_name = $wpdb->prefix . 'pr_recommendations';
+        
+        // Check if position column exists
+        $position_exists = $wpdb->get_results("SHOW COLUMNS FROM {$table_name} LIKE 'position'");
+        
+        if (empty($position_exists)) {
+            // Add position column if it doesn't exist
+            self::update_tables();
+        }
+        
+        // Get all unique combinations of customer_id, team_member_id, and room_id
+        $groups = $wpdb->get_results("
+            SELECT DISTINCT customer_id, team_member_id, room_id 
+            FROM {$table_name}
+            ORDER BY customer_id, team_member_id, room_id
+        ");
+        
+        foreach ($groups as $group) {
+            // Get recommendations for this group
+            $recommendations = $wpdb->get_results($wpdb->prepare(
+                "SELECT id FROM {$table_name} 
+                 WHERE customer_id = %d AND team_member_id = %d AND (room_id = %d OR (room_id IS NULL AND %d IS NULL))
+                 ORDER BY date_created ASC",
+                $group->customer_id,
+                $group->team_member_id,
+                $group->room_id,
+                $group->room_id
+            ));
+            
+            // Update position values
+            foreach ($recommendations as $index => $recommendation) {
+                $wpdb->update(
+                    $table_name,
+                    array('position' => $index),
+                    array('id' => $recommendation->id),
+                    array('%d'),
+                    array('%d')
+                );
+            }
+        }
+        
+        error_log('Initialized position values for all recommendations');
     }
 } 

@@ -541,3 +541,43 @@ select#recommendation_room option {
 .rooms table td:first-child {
     text-transform: capitalize;
 }
+
+/* Drag and drop styles */
+.recommendation-row {
+    cursor: grab;
+    transition: background-color 0.2s ease;
+}
+
+.recommendation-row:active {
+    cursor: grabbing;
+}
+
+.recommendation-row .drag-handle {
+    color: #999;
+    margin-right: 10px;
+    cursor: grab;
+}
+
+.recommendation-row .drag-handle:active {
+    cursor: grabbing;
+}
+
+.recommendation-row .drag-handle i {
+    font-size: 1.2em;
+}
+
+/* jQuery UI sortable styles */
+.ui-state-highlight {
+    height: 3em;
+    line-height: 1.2em;
+    background-color: #f5f9ff !important;
+    border: 2px dashed #3273dc !important;
+    box-shadow: none !important;
+}
+
+.ui-sortable-helper {
+    display: table;
+    background-color: #f5f5f5 !important;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2) !important;
+    opacity: 0.9 !important;
+}

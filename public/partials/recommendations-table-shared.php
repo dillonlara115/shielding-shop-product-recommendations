@@ -24,6 +24,13 @@ if (!defined('ABSPATH')) {
  *   - placeholder_image: string - URL for placeholder image
  */
 function display_recommendations_table($recommendations, $context = array()) {
+    // Debug input
+    error_log('display_recommendations_table called with ' . count($recommendations) . ' recommendations');
+    if (!empty($recommendations)) {
+        error_log('First recommendation: ID=' . $recommendations[0]->id . ', Product=' . $recommendations[0]->product_name . ', Room ID=' . var_export($recommendations[0]->room_id, true));
+    }
+    error_log('Context: ' . print_r($context, true));
+    
     // Default context settings
     $defaults = array(
         'view' => 'team_member',  // team_member, customer, admin
@@ -74,17 +81,24 @@ function display_recommendations_table($recommendations, $context = array()) {
     if ($context['show_status']) $column_count++;
     $column_count++; // Date Added column is always shown
     if ($context['show_actions']) $column_count++;
+    if ($context['view'] === 'team_member') $column_count++; // Add column for drag handle
     
     // Is the current user a member?
     $is_member = current_user_can('read') && !current_user_can('manage_options') && !current_user_can('edit_shop_orders');
     
     // Is the current user a team admin?
     $is_team_admin = current_user_can('manage_options') || current_user_can('edit_shop_orders');
+    
+    // Get room ID from first recommendation if available
+    $room_id = !empty($recommendations) && isset($recommendations[0]->room_id) ? $recommendations[0]->room_id : 0;
     ?>
     
-    <table class="woocommerce-table shop_table recommendations-table">
+    <table class="woocommerce-table shop_table recommendations-table" data-room-id="<?php echo esc_attr($room_id); ?>">
         <thead>
             <tr>
+                <?php if ($context['view'] === 'team_member'): ?>
+                <th class="drag-column" width="30"></th>
+                <?php endif; ?>
                 <th class="product-thumbnail"><?php esc_html_e('Image', 'product-recommendations'); ?></th>
                 <th><?php esc_html_e('Product', 'product-recommendations'); ?></th>
                 <th><?php esc_html_e('Date Added', 'product-recommendations'); ?></th>
@@ -99,7 +113,7 @@ function display_recommendations_table($recommendations, $context = array()) {
                 <?php endif; ?>
             </tr>
         </thead>
-        <tbody>
+        <tbody class="sortable-recommendations">
             <?php 
             if (empty($recommendations)): ?>
                 <tr>
@@ -116,7 +130,12 @@ function display_recommendations_table($recommendations, $context = array()) {
                     $product_permalink = get_permalink($recommendation->product_id);
                     $is_private = $product && $product->get_status() === 'private';
                 ?>
-                    <tr data-id="<?php echo esc_attr($recommendation->id); ?>">
+                    <tr class="recommendation-row" data-id="<?php echo esc_attr($recommendation->id); ?>">
+                        <?php if ($context['view'] === 'team_member'): ?>
+                        <td class="drag-handle">
+                            <i class="fas fa-grip-vertical"></i>
+                        </td>
+                        <?php endif; ?>
                         <td class="product-thumbnail">
                             <?php if ($context['view'] === 'customer'): ?>
                                 <a href="<?php echo esc_url($product_permalink); ?>">

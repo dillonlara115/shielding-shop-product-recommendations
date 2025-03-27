@@ -16,6 +16,11 @@ require_once plugin_dir_path(__FILE__) . 'recommendations-table-shared.php';
 // Include tab navigation
 include_once plugin_dir_path(__FILE__) . 'tabs-navigation.php';
 
+// Update database tables to ensure position column exists and initialize positions
+require_once plugin_dir_path(dirname(dirname(__FILE__))) . 'includes/class-product-recommendations-db.php';
+Product_Recommendations_DB::update_tables();
+Product_Recommendations_DB::initialize_positions();
+
 // Get customer ID from URL
 $customer_id = isset($customer_id) ? intval($customer_id) : 0;
 
@@ -40,14 +45,14 @@ if (!$customer) {
     return;
 }
 
-// Get recommendations for this customer
+// Get recommendations for this customer with position ordering
 $recommendations = $wpdb->get_results($wpdb->prepare(
-    "SELECT r.*, p.post_title as product_name, rm.name as room_name
+    "SELECT r.*, p.post_title as product_name, rm.name as room_name 
      FROM {$wpdb->prefix}pr_recommendations r
      LEFT JOIN {$wpdb->posts} p ON r.product_id = p.ID
      LEFT JOIN {$wpdb->prefix}pr_rooms rm ON r.room_id = rm.id
      WHERE r.customer_id = %d AND r.team_member_id = %d
-     ORDER BY COALESCE(r.room_id, 0), r.date_created DESC",
+     ORDER BY COALESCE(r.room_id, 0), r.position ASC, r.date_created DESC",
     $customer_id,
     get_current_user_id()
 ));
@@ -130,10 +135,13 @@ $rooms = $wpdb->get_results($wpdb->prepare(
                                     <td>
                                         <div class="buttons are-small">
                                             <button class="button button-edit-room" data-id="<?php echo esc_attr($room->id); ?>">
-                                                <?php esc_html_e('Edit', 'product-recommendations'); ?>
+                                                <span class="icon">
+                                                    <i class="fas fa-edit"></i>
+                                                </span>
+                                                <span><?php esc_html_e('Edit', 'product-recommendations'); ?></span>
                                             </button>
-                                            <button class="button button-remove-room" data-id="<?php echo esc_attr($room->id); ?>" title="<?php esc_attr_e('Delete', 'product-recommendations'); ?>">
-                                                <span><?php esc_html_e('Delete', 'product-recommendations'); ?></span>
+                                            <button class="button button-remove-room" data-id="<?php echo esc_attr($room->id); ?>" title="<?php esc_attr_e('Remove', 'product-recommendations'); ?>">
+                                                <span><?php esc_html_e('Remove', 'product-recommendations'); ?></span>
                                             </button>
                                         </div>
                                     </td>
@@ -142,7 +150,17 @@ $rooms = $wpdb->get_results($wpdb->prepare(
                         endif; ?>
                     </tbody>
                 </table>
-                <button id="add-room-btn" class="button mt-3"><?php esc_html_e('Add Room', 'product-recommendations'); ?></button>
+                
+                <div class="field mt-4">
+                    <div class="control">
+                        <button id="add-room-btn" class="button is-primary is-small">
+                            <span class="icon">
+                                <i class="fas fa-plus"></i>
+                            </span>
+                            <span><?php esc_html_e('Add Room', 'product-recommendations'); ?></span>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -150,7 +168,7 @@ $rooms = $wpdb->get_results($wpdb->prepare(
     <div class="add-recommendation card mb-4">
         <header class="card-header">
             <p class="card-header-title">
-                <?php esc_html_e('Add New Recommendation', 'product-recommendations'); ?>
+                <?php esc_html_e('Add Recommendation', 'product-recommendations'); ?>
             </p>
         </header>
         <div class="card-content">
@@ -158,18 +176,14 @@ $rooms = $wpdb->get_results($wpdb->prepare(
                 <div class="field">
                     <label class="label" for="product_search"><?php esc_html_e('Search Products', 'product-recommendations'); ?></label>
                     <div class="control">
-                        <input type="text" 
-                               class="input" 
-                               name="product_search" 
-                               id="product_search" 
-                               autocomplete="off"
-                               placeholder="<?php esc_attr_e('Start typing to search products...', 'product-recommendations'); ?>" />
-                        <div id="product-search-results" class="product-search-results"></div>
+                        <input type="text" id="product_search" class="input" placeholder="<?php esc_attr_e('Start typing to search products...', 'product-recommendations'); ?>">
                     </div>
                 </div>
                 
-                <div id="selected-product-card" class="selected-product-card" style="display: none;">
-                    <div class="selected-product-header">
+                <div id="product-search-results" class="product-search-results"></div>
+                
+                <div class="selected-product mt-4" style="display: none;">
+                    <div class="field">
                         <h4><?php esc_html_e('Selected Product', 'product-recommendations'); ?></h4>
                     </div>
                     <div class="selected-product-content">
@@ -254,12 +268,16 @@ $rooms = $wpdb->get_results($wpdb->prepare(
         <?php endif;
         
         // Display room-specific recommendations
-        foreach ($recommendations_by_room as $room_id => $room_data): 
-            if (!empty($room_data['name'])): ?>
-                <h3 class="title is-2 mt-6 is-capitalized"><?php echo esc_html($room_data['name']); ?></h3>
-                <?php display_recommendations_table($room_data['recommendations'], $team_member_context); ?>
-            <?php endif;
-        endforeach; ?>
+        if (!empty($recommendations_by_room)): ?>
+            <?php foreach ($recommendations_by_room as $room_id => $room_data): 
+                if (!empty($room_data['recommendations'])): ?>
+                    <h3 class="title is-2 mt-6 is-capitalized"><?php echo esc_html($room_data['name']); ?></h3>
+                    <?php display_recommendations_table($room_data['recommendations'], $team_member_context); ?>
+                <?php endif;
+            endforeach; ?>
+        <?php else: ?>
+            <p><?php esc_html_e('No room-specific recommendations found.', 'product-recommendations'); ?></p>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -308,4 +326,6 @@ $rooms = $wpdb->get_results($wpdb->prepare(
             </div>
         </footer>
     </div>
+</div> 
+</div> 
 </div> 
